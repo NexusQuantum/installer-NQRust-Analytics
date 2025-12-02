@@ -38,7 +38,7 @@ services:
       - bootstrap
 
   ibis-server:
-    image: ghcr.io/idhamtrycode/analytics-engine-ibis:latest
+    image: ghcr.io/nexusquantum/analytics-engine-ibis:latest
     restart: on-failure
     platform: ${PLATFORM}
     env_file:
