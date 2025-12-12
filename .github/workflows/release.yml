@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger pada tag seperti v0.1.0, v1.0.0, dll
+
+env:
+  CARGO_TERM_COLOR: always
+  BINARY_NAME: installer-analytics
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Diperlukan untuk membuat release dan upload assets
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Install musl target
+        run: rustup target add x86_64-unknown-linux-musl
+
+      - name: Install musl-tools (untuk static linking)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: x86_64-unknown-linux-musl
+
+      - name: Build release binary
+        run: |
+          cargo build --release --target x86_64-unknown-linux-musl
+        env:
+          RUSTFLAGS: "-C target-feature=+crt-static"
+
+      - name: Strip binary (reduce size)
+        run: |
+          strip target/x86_64-unknown-linux-musl/release/${{ env.BINARY_NAME }}
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Create release archive
+        run: |
+          cd target/x86_64-unknown-linux-musl/release
+          tar -czf ${{ env.BINARY_NAME }}-${{ steps.get_version.outputs.version }}-x86_64-unknown-linux-musl.tar.gz ${{ env.BINARY_NAME }}
+          sha256sum ${{ env.BINARY_NAME }}-${{ steps.get_version.outputs.version }}-x86_64-unknown-linux-musl.tar.gz > ${{ env.BINARY_NAME }}-${{ steps.get_version.outputs.version }}-x86_64-unknown-linux-musl.tar.gz.sha256
+          cd ../../..
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## Release ${{ github.ref_name }}
+            
+            ### Installation
+            
+            Untuk menginstall binary ini, gunakan script berikut:
+            
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/install.sh | bash
+            ```
+            
+            Atau download manual:
+            - Binary: `${{ env.BINARY_NAME }}-${{ steps.get_version.outputs.version }}-x86_64-unknown-linux-musl.tar.gz`
+            - Checksum: `${{ env.BINARY_NAME }}-${{ steps.get_version.outputs.version }}-x86_64-unknown-linux-musl.tar.gz.sha256`
+            
+            ### Verifikasi Checksum
+            
+            ```bash
+            sha256sum -c ${{ env.BINARY_NAME }}-${{ steps.get_version.outputs.version }}-x86_64-unknown-linux-musl.tar.gz.sha256
+            ```
+          files: |
+            target/x86_64-unknown-linux-musl/release/${{ env.BINARY_NAME }}-${{ steps.get_version.outputs.version }}-x86_64-unknown-linux-musl.tar.gz
+            target/x86_64-unknown-linux-musl/release/${{ env.BINARY_NAME }}-${{ steps.get_version.outputs.version }}-x86_64-unknown-linux-musl.tar.gz.sha256
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

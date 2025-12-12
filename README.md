@@ -24,6 +24,22 @@ Before running the installer, ensure you have:
 
 ## Quick Start
 
+### Option 1: Install Pre-built Binary (Recommended)
+
+Untuk instalasi cepat menggunakan binary pre-built:
+
+```bash
+# Set GitHub token untuk akses private repository
+export GITHUB_TOKEN="your_github_token_here"
+
+# Download dan install
+curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/installer-analytics/main/install.sh | bash
+```
+
+**Catatan:** Karena repository ini private, Anda perlu GitHub Personal Access Token. Lihat [RELEASE.md](./RELEASE.md) untuk detail lengkap.
+
+### Option 2: Build from Source
+
 ### 1. Clone the Repository
 
 ```bash
@@ -176,6 +192,20 @@ cargo clean
 # Rebuild
 cargo build --release
 ```
+
+## Releases
+
+Aplikasi ini menggunakan sistem rilis otomatis dengan GitHub Actions. Setiap kali tag versi di-push (contoh: `v0.1.0`), GitHub akan otomatis:
+
+- Build binary untuk Linux x86_64 (static musl)
+- Membuat GitHub Release
+- Upload binary sebagai release asset
+
+Lihat [RELEASE.md](./RELEASE.md) untuk dokumentasi lengkap tentang:
+- Cara membuat release
+- Instalasi binary pre-built
+- Konfigurasi GitHub token untuk private repository
+- Troubleshooting
 
 ## Development
 
