@@ -3,8 +3,11 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::{DefaultTerminal, Frame};
 use reqwest::Client;
 use serde::Deserialize;
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::{env, fs};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 
@@ -68,13 +71,15 @@ impl App {
             .or_else(|_| env::var("GITHUB_TOKEN"))
             .or_else(|_| env::var("GH_TOKEN"))
             .ok();
+        let token_from_disk = App::load_token_from_disk();
+        let initial_token = token_from_env.clone().or(token_from_disk.clone());
 
         let mut registry_form = RegistryForm::new();
-        if let Some(token) = token_from_env.clone() {
+        if let Some(token) = initial_token.clone() {
             registry_form.token = token;
         }
 
-        let initial_state = if token_from_env.is_some() {
+        let initial_state = if initial_token.is_some() {
             AppState::Confirmation
         } else {
             AppState::RegistrySetup
@@ -98,7 +103,7 @@ impl App {
             update_message: None,
             registry_form,
             registry_status: None,
-            ghcr_token: token_from_env,
+            ghcr_token: initial_token,
         };
 
         app.ensure_menu_selection();
@@ -202,6 +207,8 @@ impl App {
                                         "Authentication required to check for updates.".to_string(),
                                     );
                                     self.state = AppState::RegistrySetup;
+                                    self.registry_form.current_field = 0;
+                                    self.registry_form.editing = false;
                                 } else {
                                     match self.load_updates().await {
                                         Ok(_) => {
@@ -216,6 +223,15 @@ impl App {
                                         }
                                     }
                                 }
+                            }
+                            MenuSelection::UpdateToken => {
+                                self.registry_status =
+                                    Some("Update token and submit (Ctrl+S). Esc to cancel.".to_string());
+                                self.registry_form.current_field = 0;
+                                self.registry_form.editing = false;
+                                self.registry_form.error_message.clear();
+                                self.registry_form.token = self.ghcr_token.clone().unwrap_or_default();
+                                self.state = AppState::RegistrySetup;
                             }
                             MenuSelection::Cancel => {
                                 self.running = false;
@@ -332,6 +348,10 @@ impl App {
             options.push(MenuSelection::GenerateEnv);
         }
 
+        if self.ghcr_token.is_some() {
+            options.push(MenuSelection::UpdateToken);
+        }
+
         options.push(MenuSelection::CheckUpdates);
 
         if self.env_exists && self.config_exists {
@@ -356,6 +376,28 @@ impl App {
         if self.update_selection_index >= self.update_infos.len() {
             self.update_selection_index = self.update_infos.len().saturating_sub(1);
         }
+    }
+
+    fn token_file_path() -> PathBuf {
+        utils::project_root().join(".ghcr_token")
+    }
+
+    fn load_token_from_disk() -> Option<String> {
+        fs::read_to_string(Self::token_file_path())
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+    }
+
+    fn persist_token(&self, token: &str) -> Result<()> {
+        let path = Self::token_file_path();
+        fs::write(&path, token)?;
+        #[cfg(unix)]
+        {
+            let perms = std::fs::Permissions::from_mode(0o600);
+            fs::set_permissions(&path, perms)?;
+        }
+        Ok(())
     }
 
     fn handle_registry_setup_events(&mut self) -> Result<Option<RegistryAction>> {
@@ -471,6 +513,13 @@ impl App {
             self.registry_status = Some("Authenticated with ghcr.io successfully".to_string());
             self.ghcr_token = Some(token.clone());
             self.registry_form.error_message.clear();
+            // Persist so users don't have to paste again
+            if let Err(e) = self.persist_token(&token) {
+                self.registry_status = Some(format!(
+                    "Authenticated, but failed to cache token locally: {}",
+                    e
+                ));
+            }
             Ok(true)
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -529,10 +578,15 @@ impl App {
                 .or_else(|_| env::var("GITHUB_TOKEN"))
                 .or_else(|_| env::var("GH_TOKEN"))
                 .ok();
-            if env_token.is_some() {
-                self.ghcr_token = env_token.clone();
+            if let Some(token) = env_token.clone() {
+                self.ghcr_token = Some(token.clone());
+                Some(token)
+            } else if let Some(token) = App::load_token_from_disk() {
+                self.ghcr_token = Some(token.clone());
+                Some(token)
+            } else {
+                None
             }
-            env_token
         };
 
         self.update_infos = collect_update_infos(&client, token.as_deref()).await?;

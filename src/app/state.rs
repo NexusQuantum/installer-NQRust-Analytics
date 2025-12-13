@@ -16,6 +16,7 @@ pub enum MenuSelection {
     Proceed,
     GenerateEnv,
     GenerateConfig,
+    UpdateToken,
     CheckUpdates,
     Cancel,
 }

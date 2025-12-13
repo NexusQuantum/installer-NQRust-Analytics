@@ -4,6 +4,7 @@
 # Environment files
 .env
 config.yaml
+.ghcr_token
 /data
 # .env.local
 # .env.*.local
