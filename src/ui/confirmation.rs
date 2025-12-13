@@ -153,11 +153,7 @@ pub fn render_confirmation(frame: &mut Frame, view: &ConfirmationView<'_>) {
             ),
             MenuSelection::GenerateEnv => ("Generate .env", get_orange_color(), get_orange_color()),
             MenuSelection::CheckUpdates => ("Check for updates", Color::Cyan, Color::Cyan),
-            MenuSelection::UpdateToken => (
-                "Update GHCR token",
-                Color::Yellow,
-                Color::Yellow,
-            ),
+            MenuSelection::UpdateToken => ("Update GHCR token", Color::Yellow, Color::Yellow),
             MenuSelection::Proceed => ("Proceed with installation", Color::Green, Color::Green),
             MenuSelection::Cancel => ("Cancel", Color::Red, Color::Red),
         };

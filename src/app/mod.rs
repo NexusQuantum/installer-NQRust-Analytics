@@ -3,11 +3,11 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::{DefaultTerminal, Frame};
 use reqwest::Client;
 use serde::Deserialize;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::{env, fs};
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 
@@ -225,12 +225,14 @@ impl App {
                                 }
                             }
                             MenuSelection::UpdateToken => {
-                                self.registry_status =
-                                    Some("Update token and submit (Ctrl+S). Esc to cancel.".to_string());
+                                self.registry_status = Some(
+                                    "Update token and submit (Ctrl+S). Esc to cancel.".to_string(),
+                                );
                                 self.registry_form.current_field = 0;
                                 self.registry_form.editing = false;
                                 self.registry_form.error_message.clear();
-                                self.registry_form.token = self.ghcr_token.clone().unwrap_or_default();
+                                self.registry_form.token =
+                                    self.ghcr_token.clone().unwrap_or_default();
                                 self.state = AppState::RegistrySetup;
                             }
                             MenuSelection::Cancel => {
@@ -739,32 +741,27 @@ impl App {
             let sums_path = env::temp_dir().join("nqrust-analytics-SHA256SUMS");
             fs::write(&sums_path, &sums_bytes)?;
 
-            let expected = fs::read_to_string(&sums_path)
-                .ok()
-                .and_then(|content| {
-                    content.lines().find_map(|line| {
-                        let mut parts = line.split_whitespace();
-                        let hash = parts.next()?;
-                        let name = parts.next()?;
-                        if name.ends_with(
-                            deb_path
-                                .file_name()
-                                .map(|s| s.to_string_lossy().to_string())
-                                .unwrap_or_default()
-                                .as_str(),
-                        ) {
-                            Some(hash.to_string())
-                        } else {
-                            None
-                        }
-                    })
-                });
+            let expected = fs::read_to_string(&sums_path).ok().and_then(|content| {
+                content.lines().find_map(|line| {
+                    let mut parts = line.split_whitespace();
+                    let hash = parts.next()?;
+                    let name = parts.next()?;
+                    if name.ends_with(
+                        deb_path
+                            .file_name()
+                            .map(|s| s.to_string_lossy().to_string())
+                            .unwrap_or_default()
+                            .as_str(),
+                    ) {
+                        Some(hash.to_string())
+                    } else {
+                        None
+                    }
+                })
+            });
 
             if let Some(expected_hash) = expected {
-                let output = Command::new("sha256sum")
-                    .arg(&deb_path)
-                    .output()
-                    .await?;
+                let output = Command::new("sha256sum").arg(&deb_path).output().await?;
 
                 if !output.status.success() {
                     return Err(eyre!("Failed to run sha256sum on downloaded package"));
@@ -782,11 +779,16 @@ impl App {
 
                 self.add_log("✅ Checksum verified");
             } else {
-                self.add_log("⚠️  Could not find matching entry in SHA256SUMS; skipping checksum check");
+                self.add_log(
+                    "⚠️  Could not find matching entry in SHA256SUMS; skipping checksum check",
+                );
             }
         }
 
-        self.add_log(&format!("📦 Executing: sudo dpkg -i {}", deb_path.display()));
+        self.add_log(&format!(
+            "📦 Executing: sudo dpkg -i {}",
+            deb_path.display()
+        ));
 
         let deb_arg = deb_path.to_string_lossy().to_string();
 

@@ -206,8 +206,8 @@ async fn fetch_installer_update(client: &Client) -> Result<Option<UpdateInfo>> {
 
     let release: ReleaseResponse = response.error_for_status()?.json().await?;
 
-    let current_version = Version::parse(env!("CARGO_PKG_VERSION"))
-        .unwrap_or_else(|_| Version::new(0, 0, 0));
+    let current_version =
+        Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or_else(|_| Version::new(0, 0, 0));
 
     let remote_version = Version::parse(release.tag_name.trim_start_matches('v')).ok();
 
