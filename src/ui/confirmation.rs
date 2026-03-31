@@ -160,6 +160,7 @@ pub fn render_confirmation(frame: &mut Frame, view: &ConfirmationView<'_>) {
                 get_orange_color(),
             ),
             MenuSelection::GenerateEnv => ("Generate .env", get_orange_color(), get_orange_color()),
+            MenuSelection::ConfigureKeycloak => ("Configure Keycloak SSO (optional)", Color::Cyan, Color::Cyan),
             MenuSelection::CheckUpdates => ("Check for updates", Color::Cyan, Color::Cyan),
             MenuSelection::UpdateToken => ("Update GHCR token", Color::Yellow, Color::Yellow),
             MenuSelection::Proceed => ("Proceed with installation", Color::Green, Color::Green),

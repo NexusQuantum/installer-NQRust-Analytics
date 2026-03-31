@@ -14,17 +14,19 @@ use tokio::process::Command;
 use crate::templates::{self, ConfigTemplate};
 use crate::ui::{
     self, ConfigSelectionView, ConfirmationView, EnvSetupView, ErrorView, InstallingView,
-    LocalLlmConfigView, RegistrySetupView, SuccessView, UpdateListView,
+    KeycloakConfigView, LocalLlmConfigView, RegistrySetupView, SuccessView, UpdateListView,
 };
 use crate::utils;
 
 pub mod form_data;
+pub mod keycloak_form_data;
 pub mod local_llm_form_data;
 pub mod registry_form;
 pub mod state;
 mod updates;
 
 pub use form_data::FormData;
+pub use keycloak_form_data::KeycloakFormData;
 pub use local_llm_form_data::LocalLlmFormData;
 use registry_form::RegistryForm;
 pub use state::{AppState, MenuSelection};
@@ -54,6 +56,7 @@ pub struct App {
     pub(crate) env_exists: bool,
     pub(crate) config_exists: bool,
     pub(crate) form_data: FormData,
+    pub(crate) keycloak_form_data: KeycloakFormData,
     pub(crate) local_llm_form_data: LocalLlmFormData,
     pub(crate) menu_selection: MenuSelection,
     config_selection_index: usize,
@@ -106,6 +109,7 @@ impl App {
             env_exists,
             config_exists,
             form_data: FormData::new(),
+            keycloak_form_data: KeycloakFormData::new(),
             local_llm_form_data: LocalLlmFormData::new(),
             menu_selection: MenuSelection::Proceed,
             config_selection_index: 0,
@@ -248,6 +252,12 @@ impl App {
                                     self.ghcr_token.clone().unwrap_or_default();
                                 self.state = AppState::RegistrySetup;
                             }
+                            MenuSelection::ConfigureKeycloak => {
+                                self.keycloak_form_data.focus_state =
+                                    crate::app::keycloak_form_data::FocusState::EnableToggle;
+                                self.keycloak_form_data.error_message.clear();
+                                self.state = AppState::KeycloakConfig;
+                            }
                             MenuSelection::Cancel => {
                                 self.running = false;
                             }
@@ -297,6 +307,28 @@ impl App {
                 }
                 AppState::ConfigSelection => {
                     self.handle_config_selection_events()?;
+                }
+                AppState::KeycloakConfig => {
+                    if let Some(saved) = self.handle_keycloak_config_events()? {
+                        if saved {
+                            // Persist Keycloak config into .env if it already exists
+                            if self.env_exists {
+                                if let Err(e) = self.apply_keycloak_to_env() {
+                                    self.state = AppState::Error(format!(
+                                        "Failed to update .env with Keycloak settings: {}",
+                                        e
+                                    ));
+                                    return Ok(());
+                                }
+                            }
+                        }
+                        self.state = AppState::Confirmation;
+                        self.menu_selection = if self.env_exists && self.config_exists {
+                            MenuSelection::Proceed
+                        } else {
+                            MenuSelection::GenerateConfig
+                        };
+                    }
                 }
                 AppState::LocalLlmConfig => {
                     if let Some(proceed) = self.handle_local_llm_config_events()? {
@@ -430,6 +462,7 @@ impl App {
 
         if self.env_exists && self.config_exists {
             options.push(MenuSelection::Proceed);
+            options.push(MenuSelection::ConfigureKeycloak);
         }
 
         options.push(MenuSelection::Cancel);
@@ -1168,6 +1201,155 @@ impl App {
         Ok(None)
     }
 
+    fn apply_keycloak_to_env(&self) -> Result<()> {
+        let project_root = utils::project_root();
+        let env_path = project_root.join(".env");
+        let content = fs::read_to_string(&env_path)?;
+        let kc = &self.keycloak_form_data;
+
+        let replacements: &[(&str, String)] = &[
+            ("KEYCLOAK_OAUTH_ENABLED=", format!("KEYCLOAK_OAUTH_ENABLED={}", if kc.enabled { "true" } else { "false" })),
+            ("KEYCLOAK_PUBLIC_URL=", format!("KEYCLOAK_PUBLIC_URL={}", kc.public_url.trim())),
+            ("KEYCLOAK_URL=", format!("KEYCLOAK_URL={}", kc.keycloak_url())),
+            ("KEYCLOAK_REALM=", format!("KEYCLOAK_REALM={}", if kc.realm.trim().is_empty() { "master".to_string() } else { kc.realm.trim().to_string() })),
+            ("KEYCLOAK_CLIENT_ID=", format!("KEYCLOAK_CLIENT_ID={}", kc.client_id.trim())),
+            ("KEYCLOAK_CLIENT_SECRET=", format!("KEYCLOAK_CLIENT_SECRET={}", kc.client_secret.trim())),
+            ("KEYCLOAK_DEFAULT_ROLE=", format!("KEYCLOAK_DEFAULT_ROLE={}", kc.default_role())),
+            ("KEYCLOAK_AUTO_REGISTER=", format!("KEYCLOAK_AUTO_REGISTER={}", if kc.auto_register { "true" } else { "false" })),
+        ];
+
+        let updated = content.lines().map(|line| {
+            for (prefix, replacement) in replacements {
+                if line.starts_with(prefix) {
+                    return replacement.clone();
+                }
+            }
+            line.to_string()
+        }).collect::<Vec<_>>().join("\n");
+
+        // Preserve trailing newline if original had one
+        let updated = if content.ends_with('\n') { format!("{}\n", updated) } else { updated };
+        fs::write(&env_path, updated)?;
+        Ok(())
+    }
+
+    fn handle_keycloak_config_events(&mut self) -> Result<Option<bool>> {
+        use crate::app::keycloak_form_data::FocusState;
+
+        if !event::poll(std::time::Duration::from_millis(100))? {
+            return Ok(None);
+        }
+
+        if let Event::Key(key) = event::read()? {
+            if key.kind != KeyEventKind::Press {
+                return Ok(None);
+            }
+
+            match key.code {
+                // Save
+                KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    if self.keycloak_form_data.validate() {
+                        return Ok(Some(true));
+                    }
+                }
+                KeyCode::Enter => match &self.keycloak_form_data.focus_state {
+                    FocusState::SaveButton => {
+                        if self.keycloak_form_data.validate() {
+                            return Ok(Some(true));
+                        }
+                    }
+                    FocusState::CancelButton => {
+                        return Ok(Some(false));
+                    }
+                    FocusState::EnableToggle => {
+                        self.keycloak_form_data.enabled = !self.keycloak_form_data.enabled;
+                    }
+                    FocusState::AutoRegisterToggle => {
+                        self.keycloak_form_data.auto_register = !self.keycloak_form_data.auto_register;
+                    }
+                    FocusState::Field(_) | FocusState::RoleSelect => {}
+                },
+                // Toggle booleans with space
+                KeyCode::Char(' ') => match &self.keycloak_form_data.focus_state {
+                    FocusState::EnableToggle => {
+                        self.keycloak_form_data.enabled = !self.keycloak_form_data.enabled;
+                    }
+                    FocusState::AutoRegisterToggle => {
+                        self.keycloak_form_data.auto_register = !self.keycloak_form_data.auto_register;
+                    }
+                    _ => {}
+                },
+                // Role select: left/right
+                KeyCode::Left => {
+                    if matches!(self.keycloak_form_data.focus_state, FocusState::RoleSelect) {
+                        let len = crate::app::keycloak_form_data::ROLES.len();
+                        self.keycloak_form_data.default_role_index =
+                            (self.keycloak_form_data.default_role_index + len - 1) % len;
+                    }
+                }
+                KeyCode::Right => {
+                    if matches!(self.keycloak_form_data.focus_state, FocusState::RoleSelect) {
+                        let len = crate::app::keycloak_form_data::ROLES.len();
+                        self.keycloak_form_data.default_role_index =
+                            (self.keycloak_form_data.default_role_index + 1) % len;
+                    }
+                }
+                // Text input for active field
+                KeyCode::Char(c) => {
+                    if let Some(val) = self.keycloak_form_data.get_current_value_mut() {
+                        val.push(c);
+                        self.keycloak_form_data.error_message.clear();
+                    }
+                }
+                KeyCode::Backspace => {
+                    if let Some(val) = self.keycloak_form_data.get_current_value_mut() {
+                        val.pop();
+                    }
+                }
+                // Navigation: Tab / Down / Up
+                KeyCode::Tab | KeyCode::Down => {
+                    let enabled = self.keycloak_form_data.enabled;
+                    self.keycloak_form_data.focus_state = match &self.keycloak_form_data.focus_state {
+                        FocusState::EnableToggle => {
+                            if enabled { FocusState::Field(0) } else { FocusState::SaveButton }
+                        }
+                        FocusState::Field(i) => {
+                            let next = i + 1;
+                            if next < KeycloakFormData::total_text_fields() {
+                                FocusState::Field(next)
+                            } else {
+                                FocusState::RoleSelect
+                            }
+                        }
+                        FocusState::RoleSelect => FocusState::AutoRegisterToggle,
+                        FocusState::AutoRegisterToggle => FocusState::SaveButton,
+                        FocusState::SaveButton => FocusState::CancelButton,
+                        FocusState::CancelButton => FocusState::EnableToggle,
+                    };
+                }
+                KeyCode::BackTab | KeyCode::Up => {
+                    let enabled = self.keycloak_form_data.enabled;
+                    self.keycloak_form_data.focus_state = match &self.keycloak_form_data.focus_state {
+                        FocusState::EnableToggle => FocusState::CancelButton,
+                        FocusState::Field(0) => FocusState::EnableToggle,
+                        FocusState::Field(i) => FocusState::Field(i - 1),
+                        FocusState::RoleSelect => FocusState::Field(KeycloakFormData::total_text_fields() - 1),
+                        FocusState::AutoRegisterToggle => FocusState::RoleSelect,
+                        FocusState::SaveButton => {
+                            if enabled { FocusState::AutoRegisterToggle } else { FocusState::EnableToggle }
+                        }
+                        FocusState::CancelButton => FocusState::SaveButton,
+                    };
+                }
+                KeyCode::Esc => {
+                    return Ok(Some(false));
+                }
+                _ => {}
+            }
+        }
+        Ok(None)
+    }
+
     fn handle_local_llm_config_events(&mut self) -> Result<Option<bool>> {
         use crate::app::local_llm_form_data::FocusState;
 
@@ -1358,8 +1540,13 @@ impl App {
             .to_string();
         let user_uuid = format!("demo-user-{}", uuid_fragment);
 
-        // Generate a secure JWT secret (64 hex characters = 256 bits)
+        // Generate secure secrets (64 hex characters = 256 bits each)
         let jwt_secret = format!(
+            "{}{}",
+            uuid::Uuid::new_v4().to_string().replace("-", ""),
+            uuid::Uuid::new_v4().to_string().replace("-", "")
+        );
+        let nextauth_secret = format!(
             "{}{}",
             uuid::Uuid::new_v4().to_string().replace("-", ""),
             uuid::Uuid::new_v4().to_string().replace("-", "")
@@ -1374,6 +1561,18 @@ impl App {
         env_content = env_content.replace("{{HOST_PORT}}", "3000");
         env_content = env_content.replace("{{AI_SERVICE_FORWARD_PORT}}", "5555");
         env_content = env_content.replace("{{JWT_SECRET}}", &jwt_secret);
+        env_content = env_content.replace("{{NEXTAUTH_SECRET}}", &nextauth_secret);
+
+        // Keycloak — defaults (disabled); user can configure via menu after .env is generated
+        let kc = &self.keycloak_form_data;
+        env_content = env_content.replace("{{KEYCLOAK_OAUTH_ENABLED}}", if kc.enabled { "true" } else { "false" });
+        env_content = env_content.replace("{{KEYCLOAK_PUBLIC_URL}}", kc.public_url.trim());
+        env_content = env_content.replace("{{KEYCLOAK_URL}}", &kc.keycloak_url());
+        env_content = env_content.replace("{{KEYCLOAK_REALM}}", if kc.realm.trim().is_empty() { "master" } else { kc.realm.trim() });
+        env_content = env_content.replace("{{KEYCLOAK_CLIENT_ID}}", kc.client_id.trim());
+        env_content = env_content.replace("{{KEYCLOAK_CLIENT_SECRET}}", kc.client_secret.trim());
+        env_content = env_content.replace("{{KEYCLOAK_DEFAULT_ROLE}}", kc.default_role());
+        env_content = env_content.replace("{{KEYCLOAK_AUTO_REGISTER}}", if kc.auto_register { "true" } else { "false" });
 
         // License key — left empty; user activates via the web UI after installation
         env_content = env_content.replace("{{LICENSE_KEY}}", "");
@@ -1803,6 +2002,12 @@ impl App {
                     selected_index: self.config_selection_index,
                 };
                 ui::render_config_selection(frame, &view);
+            }
+            AppState::KeycloakConfig => {
+                let view = KeycloakConfigView {
+                    form_data: &self.keycloak_form_data,
+                };
+                ui::render_keycloak_config(frame, &view);
             }
             AppState::LocalLlmConfig => {
                 let view = LocalLlmConfigView {
