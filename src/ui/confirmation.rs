@@ -25,9 +25,9 @@ pub fn render_confirmation(frame: &mut Frame, view: &ConfirmationView<'_>) {
         .direction(Direction::Vertical)
         .margin(1)
         .constraints([
-            Constraint::Length(5), // ASCII header (smaller - 6 lines but compact)
+            Constraint::Length(5), // ASCII header
             Constraint::Min(10),
-            Constraint::Length(6),
+            Constraint::Min(4),    // Menu box — grows with number of items
             Constraint::Length(2),
         ])
         .split(area);
