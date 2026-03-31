@@ -104,8 +104,8 @@ const SETTINGS_OPEN_ROUTER: TemplateSettings = TemplateSettings {
 
 const CONFIG_OPENAI: ConfigTemplate = ConfigTemplate {
     key: "openai",
-    name: "OpenAI (GPT-4o mini)",
-    description: "Use OpenAI gpt-4o-mini with text-embedding-3-large",
+    name: "OpenAI (GPT-5 mini)",
+    description: "Use OpenAI gpt-5-mini with text-embedding-3-large",
     template: include_str!("../config_templates/providers/openai.yaml"),
     pipeline_overrides: NO_OVERRIDES,
     settings: SETTINGS_OPENAI,

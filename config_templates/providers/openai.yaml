@@ -3,13 +3,13 @@ provider: litellm_llm
 timeout: 120
 models:
   - alias: default
-    model: gpt-4o-mini
+    model: gpt-5-mini
     context_window_size: 128000
     kwargs:
-      max_tokens: 4096
+      reasoning_effort: minimal
+      max_completion_tokens: 4096
       n: 1
       seed: 0
-      temperature: 0
 
 ---
 type: embedder
