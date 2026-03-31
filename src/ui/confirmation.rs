@@ -21,14 +21,17 @@ pub struct ConfirmationView<'a> {
 pub fn render_confirmation(frame: &mut Frame, view: &ConfirmationView<'_>) {
     let area = frame.area();
 
+    // 1 blank line + one line per item + 2 border lines
+    let menu_height = (view.menu_options.len() as u16) + 3;
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
         .constraints([
-            Constraint::Length(5), // ASCII header
-            Constraint::Min(10),
-            Constraint::Min(4),    // Menu box — grows with number of items
-            Constraint::Length(2),
+            Constraint::Length(5),           // ASCII header
+            Constraint::Min(10),             // Status box
+            Constraint::Length(menu_height), // Menu box — exact fit
+            Constraint::Length(2),           // Help text
         ])
         .split(area);
 
