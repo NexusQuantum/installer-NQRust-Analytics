@@ -47,14 +47,29 @@ pub fn render_keycloak_config(frame: &mut Frame, view: &KeycloakConfigView<'_>) 
     // --- Enable toggle ---
     let enable_focused = matches!(data.focus_state, FocusState::EnableToggle);
     let enable_style = if enable_focused {
-        Style::default().fg(Color::Black).bg(get_orange_color()).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Black)
+            .bg(get_orange_color())
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::White)
     };
     let enable_value = if data.enabled {
-        Span::styled(" YES ", Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD))
+        Span::styled(
+            " YES ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )
     } else {
-        Span::styled(" NO  ", Style::default().fg(Color::Black).bg(Color::DarkGray).add_modifier(Modifier::BOLD))
+        Span::styled(
+            " NO  ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        )
     };
     lines.push(Line::from(vec![
         Span::styled("  Enable Keycloak SSO: ", enable_style),
@@ -68,7 +83,10 @@ pub fn render_keycloak_config(frame: &mut Frame, view: &KeycloakConfigView<'_>) 
         for i in 0..KeycloakFormData::total_text_fields() {
             let is_focused = matches!(&data.focus_state, FocusState::Field(idx) if *idx == i);
             let field_style = if is_focused {
-                Style::default().fg(Color::Black).bg(get_orange_color()).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(get_orange_color())
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
             };
@@ -97,18 +115,24 @@ pub fn render_keycloak_config(frame: &mut Frame, view: &KeycloakConfigView<'_>) 
             let label = KeycloakFormData::field_name(i);
             lines.push(Line::from(vec![
                 Span::styled(format!("  {}: ", label), field_style),
-                Span::styled(display_value, if is_focused {
-                    Style::default().fg(Color::Black).bg(get_orange_color())
-                } else {
-                    Style::default().fg(Color::Cyan)
-                }),
+                Span::styled(
+                    display_value,
+                    if is_focused {
+                        Style::default().fg(Color::Black).bg(get_orange_color())
+                    } else {
+                        Style::default().fg(Color::Cyan)
+                    },
+                ),
             ]));
 
             if i == 0 && !data.public_url.is_empty() {
                 let derived = data.keycloak_url();
                 if derived != data.public_url {
                     lines.push(Line::from(vec![
-                        Span::styled("    → KEYCLOAK_URL (auto): ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            "    → KEYCLOAK_URL (auto): ",
+                            Style::default().fg(Color::DarkGray),
+                        ),
                         Span::styled(derived, Style::default().fg(Color::DarkGray)),
                     ]));
                 }
@@ -119,7 +143,10 @@ pub fn render_keycloak_config(frame: &mut Frame, view: &KeycloakConfigView<'_>) 
         // --- Default Role selector ---
         let role_focused = matches!(data.focus_state, FocusState::RoleSelect);
         let role_label_style = if role_focused {
-            Style::default().fg(Color::Black).bg(get_orange_color()).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Black)
+                .bg(get_orange_color())
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::White)
         };
@@ -127,7 +154,10 @@ pub fn render_keycloak_config(frame: &mut Frame, view: &KeycloakConfigView<'_>) 
         for (i, role) in ROLES.iter().enumerate() {
             let selected = i == data.default_role_index;
             let style = if selected {
-                Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Green)
+                    .add_modifier(Modifier::BOLD)
             } else if role_focused {
                 Style::default().fg(Color::Yellow)
             } else {
@@ -135,21 +165,39 @@ pub fn render_keycloak_config(frame: &mut Frame, view: &KeycloakConfigView<'_>) 
             };
             role_spans.push(Span::styled(format!(" {} ", role), style));
         }
-        role_spans.push(Span::styled("  (← → to change)", Style::default().fg(Color::DarkGray)));
+        role_spans.push(Span::styled(
+            "  (← → to change)",
+            Style::default().fg(Color::DarkGray),
+        ));
         lines.push(Line::from(role_spans));
         lines.push(Line::from(""));
 
         // --- Auto Register toggle ---
         let ar_focused = matches!(data.focus_state, FocusState::AutoRegisterToggle);
         let ar_label_style = if ar_focused {
-            Style::default().fg(Color::Black).bg(get_orange_color()).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Black)
+                .bg(get_orange_color())
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::White)
         };
         let ar_value = if data.auto_register {
-            Span::styled(" YES ", Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD))
+            Span::styled(
+                " YES ",
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            )
         } else {
-            Span::styled(" NO  ", Style::default().fg(Color::Black).bg(Color::DarkGray).add_modifier(Modifier::BOLD))
+            Span::styled(
+                " NO  ",
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::DarkGray)
+                    .add_modifier(Modifier::BOLD),
+            )
         };
         lines.push(Line::from(vec![
             Span::styled("  Auto-register new SSO users: ", ar_label_style),
@@ -164,14 +212,21 @@ pub fn render_keycloak_config(frame: &mut Frame, view: &KeycloakConfigView<'_>) 
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(get_orange_accent()))
                 .title("SSO Configuration")
-                .title_style(Style::default().fg(get_orange_color()).add_modifier(Modifier::BOLD)),
+                .title_style(
+                    Style::default()
+                        .fg(get_orange_color())
+                        .add_modifier(Modifier::BOLD),
+                ),
         )
         .wrap(Wrap { trim: false });
     frame.render_widget(form, chunks[1]);
 
     // --- Error / hint ---
     let hint_text = if !data.error_message.is_empty() {
-        Line::from(Span::styled(&data.error_message, Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)))
+        Line::from(Span::styled(
+            &data.error_message,
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ))
     } else {
         Line::from(Span::styled(
             "Tab/↑↓ to navigate • Space to toggle • ← → for role • Enter to edit field • Ctrl+S to save • Esc to skip",
@@ -188,12 +243,18 @@ pub fn render_keycloak_config(frame: &mut Frame, view: &KeycloakConfigView<'_>) 
     let cancel_focused = matches!(data.focus_state, FocusState::CancelButton);
 
     let save_style = if save_focused {
-        Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Black)
+            .bg(Color::Green)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::Green)
     };
     let cancel_style = if cancel_focused {
-        Style::default().fg(Color::Black).bg(Color::Red).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Black)
+            .bg(Color::Red)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::Red)
     };

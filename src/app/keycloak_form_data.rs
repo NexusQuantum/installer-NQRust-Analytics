@@ -64,7 +64,8 @@ impl KeycloakFormData {
             return false;
         }
         if !self.public_url.starts_with("http://") && !self.public_url.starts_with("https://") {
-            self.error_message = "Keycloak Public URL must start with http:// or https://".to_string();
+            self.error_message =
+                "Keycloak Public URL must start with http:// or https://".to_string();
             return false;
         }
         if self.realm.trim().is_empty() {

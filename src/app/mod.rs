@@ -1208,27 +1208,72 @@ impl App {
         let kc = &self.keycloak_form_data;
 
         let replacements: &[(&str, String)] = &[
-            ("KEYCLOAK_OAUTH_ENABLED=", format!("KEYCLOAK_OAUTH_ENABLED={}", if kc.enabled { "true" } else { "false" })),
-            ("KEYCLOAK_PUBLIC_URL=", format!("KEYCLOAK_PUBLIC_URL={}", kc.public_url.trim())),
-            ("KEYCLOAK_URL=", format!("KEYCLOAK_URL={}", kc.keycloak_url())),
-            ("KEYCLOAK_REALM=", format!("KEYCLOAK_REALM={}", if kc.realm.trim().is_empty() { "master".to_string() } else { kc.realm.trim().to_string() })),
-            ("KEYCLOAK_CLIENT_ID=", format!("KEYCLOAK_CLIENT_ID={}", kc.client_id.trim())),
-            ("KEYCLOAK_CLIENT_SECRET=", format!("KEYCLOAK_CLIENT_SECRET={}", kc.client_secret.trim())),
-            ("KEYCLOAK_DEFAULT_ROLE=", format!("KEYCLOAK_DEFAULT_ROLE={}", kc.default_role())),
-            ("KEYCLOAK_AUTO_REGISTER=", format!("KEYCLOAK_AUTO_REGISTER={}", if kc.auto_register { "true" } else { "false" })),
+            (
+                "KEYCLOAK_OAUTH_ENABLED=",
+                format!(
+                    "KEYCLOAK_OAUTH_ENABLED={}",
+                    if kc.enabled { "true" } else { "false" }
+                ),
+            ),
+            (
+                "KEYCLOAK_PUBLIC_URL=",
+                format!("KEYCLOAK_PUBLIC_URL={}", kc.public_url.trim()),
+            ),
+            (
+                "KEYCLOAK_URL=",
+                format!("KEYCLOAK_URL={}", kc.keycloak_url()),
+            ),
+            (
+                "KEYCLOAK_REALM=",
+                format!(
+                    "KEYCLOAK_REALM={}",
+                    if kc.realm.trim().is_empty() {
+                        "master".to_string()
+                    } else {
+                        kc.realm.trim().to_string()
+                    }
+                ),
+            ),
+            (
+                "KEYCLOAK_CLIENT_ID=",
+                format!("KEYCLOAK_CLIENT_ID={}", kc.client_id.trim()),
+            ),
+            (
+                "KEYCLOAK_CLIENT_SECRET=",
+                format!("KEYCLOAK_CLIENT_SECRET={}", kc.client_secret.trim()),
+            ),
+            (
+                "KEYCLOAK_DEFAULT_ROLE=",
+                format!("KEYCLOAK_DEFAULT_ROLE={}", kc.default_role()),
+            ),
+            (
+                "KEYCLOAK_AUTO_REGISTER=",
+                format!(
+                    "KEYCLOAK_AUTO_REGISTER={}",
+                    if kc.auto_register { "true" } else { "false" }
+                ),
+            ),
         ];
 
-        let updated = content.lines().map(|line| {
-            for (prefix, replacement) in replacements {
-                if line.starts_with(prefix) {
-                    return replacement.clone();
+        let updated = content
+            .lines()
+            .map(|line| {
+                for (prefix, replacement) in replacements {
+                    if line.starts_with(prefix) {
+                        return replacement.clone();
+                    }
                 }
-            }
-            line.to_string()
-        }).collect::<Vec<_>>().join("\n");
+                line.to_string()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
 
         // Preserve trailing newline if original had one
-        let updated = if content.ends_with('\n') { format!("{}\n", updated) } else { updated };
+        let updated = if content.ends_with('\n') {
+            format!("{}\n", updated)
+        } else {
+            updated
+        };
         fs::write(&env_path, updated)?;
         Ok(())
     }
@@ -1265,7 +1310,8 @@ impl App {
                         self.keycloak_form_data.enabled = !self.keycloak_form_data.enabled;
                     }
                     FocusState::AutoRegisterToggle => {
-                        self.keycloak_form_data.auto_register = !self.keycloak_form_data.auto_register;
+                        self.keycloak_form_data.auto_register =
+                            !self.keycloak_form_data.auto_register;
                     }
                     FocusState::Field(_) | FocusState::RoleSelect => {}
                 },
@@ -1275,7 +1321,8 @@ impl App {
                         self.keycloak_form_data.enabled = !self.keycloak_form_data.enabled;
                     }
                     FocusState::AutoRegisterToggle => {
-                        self.keycloak_form_data.auto_register = !self.keycloak_form_data.auto_register;
+                        self.keycloak_form_data.auto_register =
+                            !self.keycloak_form_data.auto_register;
                     }
                     _ => {}
                 },
@@ -1309,9 +1356,14 @@ impl App {
                 // Navigation: Tab / Down / Up
                 KeyCode::Tab | KeyCode::Down => {
                     let enabled = self.keycloak_form_data.enabled;
-                    self.keycloak_form_data.focus_state = match &self.keycloak_form_data.focus_state {
+                    self.keycloak_form_data.focus_state = match &self.keycloak_form_data.focus_state
+                    {
                         FocusState::EnableToggle => {
-                            if enabled { FocusState::Field(0) } else { FocusState::SaveButton }
+                            if enabled {
+                                FocusState::Field(0)
+                            } else {
+                                FocusState::SaveButton
+                            }
                         }
                         FocusState::Field(i) => {
                             let next = i + 1;
@@ -1329,14 +1381,21 @@ impl App {
                 }
                 KeyCode::BackTab | KeyCode::Up => {
                     let enabled = self.keycloak_form_data.enabled;
-                    self.keycloak_form_data.focus_state = match &self.keycloak_form_data.focus_state {
+                    self.keycloak_form_data.focus_state = match &self.keycloak_form_data.focus_state
+                    {
                         FocusState::EnableToggle => FocusState::CancelButton,
                         FocusState::Field(0) => FocusState::EnableToggle,
                         FocusState::Field(i) => FocusState::Field(i - 1),
-                        FocusState::RoleSelect => FocusState::Field(KeycloakFormData::total_text_fields() - 1),
+                        FocusState::RoleSelect => {
+                            FocusState::Field(KeycloakFormData::total_text_fields() - 1)
+                        }
                         FocusState::AutoRegisterToggle => FocusState::RoleSelect,
                         FocusState::SaveButton => {
-                            if enabled { FocusState::AutoRegisterToggle } else { FocusState::EnableToggle }
+                            if enabled {
+                                FocusState::AutoRegisterToggle
+                            } else {
+                                FocusState::EnableToggle
+                            }
                         }
                         FocusState::CancelButton => FocusState::SaveButton,
                     };
@@ -1565,14 +1624,27 @@ impl App {
 
         // Keycloak — defaults (disabled); user can configure via menu after .env is generated
         let kc = &self.keycloak_form_data;
-        env_content = env_content.replace("{{KEYCLOAK_OAUTH_ENABLED}}", if kc.enabled { "true" } else { "false" });
+        env_content = env_content.replace(
+            "{{KEYCLOAK_OAUTH_ENABLED}}",
+            if kc.enabled { "true" } else { "false" },
+        );
         env_content = env_content.replace("{{KEYCLOAK_PUBLIC_URL}}", kc.public_url.trim());
         env_content = env_content.replace("{{KEYCLOAK_URL}}", &kc.keycloak_url());
-        env_content = env_content.replace("{{KEYCLOAK_REALM}}", if kc.realm.trim().is_empty() { "master" } else { kc.realm.trim() });
+        env_content = env_content.replace(
+            "{{KEYCLOAK_REALM}}",
+            if kc.realm.trim().is_empty() {
+                "master"
+            } else {
+                kc.realm.trim()
+            },
+        );
         env_content = env_content.replace("{{KEYCLOAK_CLIENT_ID}}", kc.client_id.trim());
         env_content = env_content.replace("{{KEYCLOAK_CLIENT_SECRET}}", kc.client_secret.trim());
         env_content = env_content.replace("{{KEYCLOAK_DEFAULT_ROLE}}", kc.default_role());
-        env_content = env_content.replace("{{KEYCLOAK_AUTO_REGISTER}}", if kc.auto_register { "true" } else { "false" });
+        env_content = env_content.replace(
+            "{{KEYCLOAK_AUTO_REGISTER}}",
+            if kc.auto_register { "true" } else { "false" },
+        );
 
         // License key — left empty; user activates via the web UI after installation
         env_content = env_content.replace("{{LICENSE_KEY}}", "");
