@@ -50,6 +50,8 @@ NEXT_PUBLIC_TELEMETRY_ENABLED=false
 JWT_SECRET={{JWT_SECRET}}
 NEXTAUTH_SECRET={{NEXTAUTH_SECRET}}
 NEXTAUTH_URL=http://localhost:3000
+# Required when Keycloak is behind Traefik with self-signed TLS certificate
+NODE_TLS_REJECT_UNAUTHORIZED=0
 
 # Keycloak / NQRust Identity SSO (Optional)
 KEYCLOAK_OAUTH_ENABLED={{KEYCLOAK_OAUTH_ENABLED}}

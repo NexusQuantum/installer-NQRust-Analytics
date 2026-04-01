@@ -43,13 +43,19 @@ impl KeycloakFormData {
     }
 
     /// Derive KEYCLOAK_URL from KEYCLOAK_PUBLIC_URL:
-    /// if public_url contains "localhost", replace with "host.docker.internal"
-    /// so the container can reach the host OS directly.
+    /// - Replace http:// with https:// — Keycloak is always behind Traefik TLS
+    /// - Replace "localhost" with "host.docker.internal" so the container can reach the host OS
     pub fn keycloak_url(&self) -> String {
-        if self.public_url.contains("localhost") {
+        let url = if self.public_url.contains("localhost") {
             self.public_url.replace("localhost", "host.docker.internal")
         } else {
             self.public_url.clone()
+        };
+        // Ensure https for server-side token exchange (Traefik uses self-signed TLS)
+        if url.starts_with("http://") {
+            url.replacen("http://", "https://", 1)
+        } else {
+            url
         }
     }
 

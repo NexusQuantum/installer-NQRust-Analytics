@@ -52,50 +52,9 @@ pub fn render_env_setup(frame: &mut Frame, view: &EnvSetupView<'_>) {
 
     let needs_openai = data.needs_openai_embedding();
 
-    // Field 0: Provider API Key
-    let is_field0_focused = matches!(&data.focus_state, FocusState::Field(0));
-
-    let field0_style = if is_field0_focused {
-        Style::default()
-            .fg(Color::Black)
-            .bg(get_orange_color())
-            .add_modifier(Modifier::BOLD)
-    } else {
-        Style::default().fg(Color::White)
-    };
-
-    let api_key_name = data.get_api_key_name();
-    let key_display = if data.api_key.is_empty() {
-        "<empty>".to_string()
-    } else {
-        let masked = if data.api_key.len() > 8 {
-            format!(
-                "{}...{}",
-                &data.api_key[..4],
-                &data.api_key[data.api_key.len() - 4..]
-            )
-        } else {
-            "*".repeat(data.api_key.len())
-        };
-        masked
-    };
-
-    let cursor0 = if is_field0_focused { "▶" } else { " " };
-
-    form_lines.push(Line::from(vec![
-        Span::styled(cursor0, field0_style),
-        Span::raw(" "),
-        Span::styled(format!("{} API Key", api_key_name), field0_style),
-        Span::raw(": "),
-        Span::styled(key_display, field0_style),
-    ]));
-    form_lines.push(Line::from(""));
-
-    // Field 1: OpenAI API Key (if needed for embedding)
-    if needs_openai {
-        let is_field1_focused = matches!(&data.focus_state, FocusState::Field(1));
-
-        let field1_style = if is_field1_focused {
+    // Helper closure: render a plain-text field (no masking)
+    let make_text_field = |label: &str, value: &str, focused: bool| -> Vec<Line<'static>> {
+        let style = if focused {
             Style::default()
                 .fg(Color::Black)
                 .bg(get_orange_color())
@@ -103,32 +62,83 @@ pub fn render_env_setup(frame: &mut Frame, view: &EnvSetupView<'_>) {
         } else {
             Style::default().fg(Color::White)
         };
-
-        let openai_key_display = if data.openai_api_key.is_empty() {
+        let cursor = if focused { "▶" } else { " " };
+        let display = if value.is_empty() {
             "<empty>".to_string()
         } else {
-            let masked = if data.openai_api_key.len() > 8 {
-                format!(
-                    "{}...{}",
-                    &data.openai_api_key[..4],
-                    &data.openai_api_key[data.openai_api_key.len() - 4..]
-                )
-            } else {
-                "*".repeat(data.openai_api_key.len())
-            };
-            masked
+            value.to_string()
         };
+        vec![
+            Line::from(vec![
+                Span::styled(cursor.to_string(), style),
+                Span::raw(" "),
+                Span::styled(label.to_string(), style),
+                Span::raw(": "),
+                Span::styled(display, style),
+            ]),
+            Line::from(""),
+        ]
+    };
 
-        let cursor1 = if is_field1_focused { "▶" } else { " " };
+    // Helper closure: render a masked API key field
+    let make_key_field = |label: &str, value: &str, focused: bool| -> Vec<Line<'static>> {
+        let style = if focused {
+            Style::default()
+                .fg(Color::Black)
+                .bg(get_orange_color())
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        let cursor = if focused { "▶" } else { " " };
+        let display = if value.is_empty() {
+            "<empty>".to_string()
+        } else if value.len() > 8 {
+            format!("{}...{}", &value[..4], &value[value.len() - 4..])
+        } else {
+            "*".repeat(value.len())
+        };
+        vec![
+            Line::from(vec![
+                Span::styled(cursor.to_string(), style),
+                Span::raw(" "),
+                Span::styled(label.to_string(), style),
+                Span::raw(": "),
+                Span::styled(display, style),
+            ]),
+            Line::from(""),
+        ]
+    };
 
-        form_lines.push(Line::from(vec![
-            Span::styled(cursor1, field1_style),
-            Span::raw(" "),
-            Span::styled("OpenAI API Key (embedding)", field1_style),
-            Span::raw(": "),
-            Span::styled(openai_key_display, field1_style),
-        ]));
-        form_lines.push(Line::from(""));
+    // Field 0: Host
+    form_lines.extend(make_text_field(
+        "Host (IP or hostname)",
+        &data.host,
+        matches!(&data.focus_state, FocusState::Field(0)),
+    ));
+
+    // Field 1: UI Port
+    form_lines.extend(make_text_field(
+        "UI Port",
+        &data.ui_port,
+        matches!(&data.focus_state, FocusState::Field(1)),
+    ));
+
+    // Field 2: Provider API Key
+    let api_key_name = data.get_api_key_name();
+    form_lines.extend(make_key_field(
+        &format!("{} API Key", api_key_name),
+        &data.api_key,
+        matches!(&data.focus_state, FocusState::Field(2)),
+    ));
+
+    // Field 3: OpenAI API Key (if needed for embedding)
+    if needs_openai {
+        form_lines.extend(make_key_field(
+            "OpenAI API Key (embedding)",
+            &data.openai_api_key,
+            matches!(&data.focus_state, FocusState::Field(3)),
+        ));
         form_lines.push(Line::from(Span::styled(
             "ℹ️  This provider uses OpenAI embedding model",
             Style::default().fg(Color::Yellow),

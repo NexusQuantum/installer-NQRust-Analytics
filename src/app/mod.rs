@@ -1253,6 +1253,10 @@ impl App {
                     if kc.auto_register { "true" } else { "false" }
                 ),
             ),
+            (
+                "NEXTAUTH_URL=",
+                format!("NEXTAUTH_URL={}", self.form_data.nextauth_url()),
+            ),
         ];
 
         let updated = content
@@ -1613,17 +1617,21 @@ impl App {
 
         let mut env_content = utils::ENV_TEMPLATE.to_string();
 
+        let kc = &self.keycloak_form_data;
+        let nextauth_url = self.form_data.nextauth_url();
+
         // Default values
         env_content = env_content.replace("{{ANALYTICS_AI_SERVICE_PORT}}", "5555");
         env_content = env_content.replace("{{USER_UUID}}", user_uuid.as_str());
         env_content = env_content.replace("{{GENERATION_MODEL}}", "default");
-        env_content = env_content.replace("{{HOST_PORT}}", "3000");
+        env_content = env_content.replace("{{HOST_PORT}}", self.form_data.ui_port.trim());
         env_content = env_content.replace("{{AI_SERVICE_FORWARD_PORT}}", "5555");
         env_content = env_content.replace("{{JWT_SECRET}}", &jwt_secret);
         env_content = env_content.replace("{{NEXTAUTH_SECRET}}", &nextauth_secret);
-
-        // Keycloak — defaults (disabled); user can configure via menu after .env is generated
-        let kc = &self.keycloak_form_data;
+        env_content = env_content.replace(
+            "NEXTAUTH_URL=http://localhost:3000",
+            &format!("NEXTAUTH_URL={}", nextauth_url),
+        );
         env_content = env_content.replace(
             "{{KEYCLOAK_OAUTH_ENABLED}}",
             if kc.enabled { "true" } else { "false" },
@@ -1874,10 +1882,35 @@ impl App {
         }
 
         self.add_log("✅ Build completed successfully!");
-        self.progress = 50.0;
+        self.progress = 40.0;
         let _ = self.redraw(terminal);
 
-        self.add_log("🚀 Step 2/2: Starting services...");
+        self.add_log("🛑 Step 2/3: Stopping existing containers...");
+        self.add_log(&format!("📦 Executing: {} down", compose_cmd.join(" ")));
+        let _ = self.redraw(terminal);
+
+        let down_status = {
+            let mut cmd = Command::new(&compose_cmd[0]);
+            if compose_cmd.len() > 1 {
+                cmd.arg(&compose_cmd[1]);
+            }
+            cmd.args(["down", "--remove-orphans"])
+                .env("DOCKER_CLI_PROGRESS", "plain")
+                .current_dir(&project_root)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .await?
+        };
+        if !down_status.success() {
+            self.add_log("⚠️ Warning: docker compose down returned non-zero (may be no containers running, continuing...)");
+        } else {
+            self.add_log("✅ Existing containers stopped.");
+        }
+        self.progress = 60.0;
+        let _ = self.redraw(terminal);
+
+        self.add_log("🚀 Step 3/3: Starting services...");
         self.add_log(&format!("📦 Executing: {} up -d", compose_cmd.join(" ")));
         let _ = self.redraw(terminal);
 
@@ -1886,7 +1919,7 @@ impl App {
             if compose_cmd.len() > 1 {
                 cmd.arg(&compose_cmd[1]);
             }
-            cmd.args(["up", "-d"])
+            cmd.args(["up", "-d", "--remove-orphans"])
                 .env("DOCKER_CLI_PROGRESS", "plain")
                 .current_dir(&project_root)
                 .stdout(Stdio::piped())
