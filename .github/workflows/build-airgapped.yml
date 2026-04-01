@@ -1,30 +1,8 @@
 name: Build Airgapped Binary
 
 on:
-    # Trigger on release
     release:
         types: [published]
-
-    # Trigger on push to specific branches
-    push:
-        branches:
-            - main
-            - airgapped-single-binary-2
-        paths:
-            - "src/**"
-            - "scripts/airgapped/**"
-            - "Cargo.toml"
-            - "Cargo.lock"
-            - "docker-compose.yaml"
-            - ".github/workflows/build-airgapped.yml"
-
-    # Trigger on PR to main or airgapped branches
-    pull_request:
-        branches:
-            - main
-            - "airgapped-*"
-
-    # Manual trigger
     workflow_dispatch:
         inputs:
             tag:
