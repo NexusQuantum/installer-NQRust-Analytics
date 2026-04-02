@@ -164,7 +164,7 @@ pub fn render_confirmation(frame: &mut Frame, view: &ConfirmationView<'_>) {
             ),
             MenuSelection::GenerateEnv => ("Generate .env", get_orange_color(), get_orange_color()),
             MenuSelection::ConfigureKeycloak => (
-                "Configure Keycloak SSO (optional)",
+                "Configure Identity SSO (optional)",
                 Color::Cyan,
                 Color::Cyan,
             ),

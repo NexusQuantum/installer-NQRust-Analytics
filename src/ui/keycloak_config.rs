@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 
-use crate::app::keycloak_form_data::{FocusState, KeycloakFormData, ROLES};
+use crate::app::keycloak_form_data::{FocusState, KeycloakFormData, ROLES, SCHEMES};
 use crate::ui::{get_orange_accent, get_orange_color};
 
 pub struct KeycloakConfigView<'a> {
@@ -27,7 +27,7 @@ pub fn render_keycloak_config(frame: &mut Frame, view: &KeycloakConfigView<'_>) 
         ])
         .split(area);
 
-    let title = Paragraph::new("🔐 Keycloak / NQRust Identity SSO (Optional)")
+    let title = Paragraph::new("🔐 NQRust Identity SSO (Optional)")
         .style(
             Style::default()
                 .fg(get_orange_color())
@@ -72,14 +72,46 @@ pub fn render_keycloak_config(frame: &mut Frame, view: &KeycloakConfigView<'_>) 
         )
     };
     lines.push(Line::from(vec![
-        Span::styled("  Enable Keycloak SSO: ", enable_style),
+        Span::styled("  Enable Identity SSO: ", enable_style),
         enable_value,
         Span::styled("  (Space to toggle)", Style::default().fg(Color::DarkGray)),
     ]));
     lines.push(Line::from(""));
 
     if data.enabled {
-        // --- Text fields ---
+        // --- Scheme selector (http / https) ---
+        let scheme_focused = matches!(data.focus_state, FocusState::SchemeSelect);
+        let scheme_label_style = if scheme_focused {
+            Style::default()
+                .fg(Color::Black)
+                .bg(get_orange_color())
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        let mut scheme_spans = vec![Span::styled("  Protocol: ", scheme_label_style)];
+        for (i, s) in SCHEMES.iter().enumerate() {
+            let selected = i == data.scheme_index;
+            let style = if selected {
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Green)
+                    .add_modifier(Modifier::BOLD)
+            } else if scheme_focused {
+                Style::default().fg(Color::Yellow)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            scheme_spans.push(Span::styled(format!(" {} ", s), style));
+        }
+        scheme_spans.push(Span::styled(
+            "  (← → to change)",
+            Style::default().fg(Color::DarkGray),
+        ));
+        lines.push(Line::from(scheme_spans));
+        lines.push(Line::from(""));
+
+        // --- Text fields (host, port, realm, client_id, client_secret) ---
         for i in 0..KeycloakFormData::total_text_fields() {
             let is_focused = matches!(&data.focus_state, FocusState::Field(idx) if *idx == i);
             let field_style = if is_focused {
@@ -92,14 +124,15 @@ pub fn render_keycloak_config(frame: &mut Frame, view: &KeycloakConfigView<'_>) 
             };
 
             let value = match i {
-                0 => &data.public_url,
-                1 => &data.realm,
-                2 => &data.client_id,
-                3 => &data.client_secret,
+                0 => &data.host,
+                1 => &data.port,
+                2 => &data.realm,
+                3 => &data.client_id,
+                4 => &data.client_secret,
                 _ => unreachable!(),
             };
 
-            let display_value = if i == 3 && !value.is_empty() {
+            let display_value = if i == 4 && !value.is_empty() {
                 // mask client secret
                 if value.len() > 8 {
                     format!("{}...{}", &value[..4], &value[value.len() - 4..])
@@ -125,15 +158,21 @@ pub fn render_keycloak_config(frame: &mut Frame, view: &KeycloakConfigView<'_>) 
                 ),
             ]));
 
-            if i == 0 && !data.public_url.is_empty() {
-                let derived = data.keycloak_url();
-                if derived != data.public_url {
+            // After port field, show derived URLs
+            if i == 1 && !data.host.trim().is_empty() {
+                let public = data.public_url();
+                let keycloak = data.keycloak_url();
+                lines.push(Line::from(vec![
+                    Span::styled("    → Public URL: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(public, Style::default().fg(Color::DarkGray)),
+                ]));
+                if keycloak != data.public_url() {
                     lines.push(Line::from(vec![
                         Span::styled(
-                            "    → KEYCLOAK_URL (auto): ",
+                            "    → Identity URL (internal): ",
                             Style::default().fg(Color::DarkGray),
                         ),
-                        Span::styled(derived, Style::default().fg(Color::DarkGray)),
+                        Span::styled(keycloak, Style::default().fg(Color::DarkGray)),
                     ]));
                 }
             }
@@ -211,7 +250,7 @@ pub fn render_keycloak_config(frame: &mut Frame, view: &KeycloakConfigView<'_>) 
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(get_orange_accent()))
-                .title("SSO Configuration")
+                .title("Identity SSO Configuration")
                 .title_style(
                     Style::default()
                         .fg(get_orange_color())

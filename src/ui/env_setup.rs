@@ -52,33 +52,19 @@ pub fn render_env_setup(frame: &mut Frame, view: &EnvSetupView<'_>) {
 
     let needs_openai = data.needs_openai_embedding();
 
-    // Helper closure: render a plain-text field (no masking)
-    let make_text_field = |label: &str, value: &str, focused: bool| -> Vec<Line<'static>> {
-        let style = if focused {
+    // Show auto-detected NEXTAUTH_URL info
+    let local_ip = crate::utils::detect_local_ip();
+    form_lines.push(Line::from(vec![
+        Span::styled("ℹ  Analytics UI URL: ", Style::default().fg(Color::Cyan)),
+        Span::styled(
+            format!("http://{}:3000", local_ip),
             Style::default()
-                .fg(Color::Black)
-                .bg(get_orange_color())
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::White)
-        };
-        let cursor = if focused { "▶" } else { " " };
-        let display = if value.is_empty() {
-            "<empty>".to_string()
-        } else {
-            value.to_string()
-        };
-        vec![
-            Line::from(vec![
-                Span::styled(cursor.to_string(), style),
-                Span::raw(" "),
-                Span::styled(label.to_string(), style),
-                Span::raw(": "),
-                Span::styled(display, style),
-            ]),
-            Line::from(""),
-        ]
-    };
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(" (auto-detected)", Style::default().fg(Color::DarkGray)),
+    ]));
+    form_lines.push(Line::from(""));
 
     // Helper closure: render a masked API key field
     let make_key_field = |label: &str, value: &str, focused: bool| -> Vec<Line<'static>> {
@@ -110,34 +96,20 @@ pub fn render_env_setup(frame: &mut Frame, view: &EnvSetupView<'_>) {
         ]
     };
 
-    // Field 0: Host
-    form_lines.extend(make_text_field(
-        "Host (IP or hostname)",
-        &data.host,
-        matches!(&data.focus_state, FocusState::Field(0)),
-    ));
-
-    // Field 1: UI Port
-    form_lines.extend(make_text_field(
-        "UI Port",
-        &data.ui_port,
-        matches!(&data.focus_state, FocusState::Field(1)),
-    ));
-
-    // Field 2: Provider API Key
+    // Field 0: Provider API Key
     let api_key_name = data.get_api_key_name();
     form_lines.extend(make_key_field(
         &format!("{} API Key", api_key_name),
         &data.api_key,
-        matches!(&data.focus_state, FocusState::Field(2)),
+        matches!(&data.focus_state, FocusState::Field(0)),
     ));
 
-    // Field 3: OpenAI API Key (if needed for embedding)
+    // Field 1: OpenAI API Key (if needed for embedding)
     if needs_openai {
         form_lines.extend(make_key_field(
             "OpenAI API Key (embedding)",
             &data.openai_api_key,
-            matches!(&data.focus_state, FocusState::Field(3)),
+            matches!(&data.focus_state, FocusState::Field(1)),
         ));
         form_lines.push(Line::from(Span::styled(
             "ℹ️  This provider uses OpenAI embedding model",

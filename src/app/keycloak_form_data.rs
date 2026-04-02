@@ -1,7 +1,8 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum FocusState {
     EnableToggle,
-    Field(usize), // 0=public_url, 1=realm, 2=client_id, 3=client_secret
+    SchemeSelect,
+    Field(usize), // 0=host, 1=port, 2=realm, 3=client_id, 4=client_secret
     RoleSelect,
     AutoRegisterToggle,
     SaveButton,
@@ -9,11 +10,14 @@ pub enum FocusState {
 }
 
 pub const ROLES: &[&str] = &["viewer", "editor", "admin"];
+pub const SCHEMES: &[&str] = &["http", "https"];
 
 #[derive(Debug, Clone)]
 pub struct KeycloakFormData {
     pub(crate) enabled: bool,
-    pub(crate) public_url: String,
+    pub(crate) scheme_index: usize, // index into SCHEMES
+    pub(crate) host: String,
+    pub(crate) port: String,
     pub(crate) realm: String,
     pub(crate) client_id: String,
     pub(crate) client_secret: String,
@@ -27,9 +31,11 @@ impl KeycloakFormData {
     pub fn new() -> Self {
         Self {
             enabled: false,
-            public_url: String::new(),
-            realm: String::from("master"),
-            client_id: String::new(),
+            scheme_index: 0, // "http"
+            host: String::new(),
+            port: String::new(),
+            realm: String::from("myrealm"),
+            client_id: String::from("nqrust-analytics"),
             client_secret: String::new(),
             default_role_index: 0, // "viewer"
             auto_register: true,
@@ -38,24 +44,39 @@ impl KeycloakFormData {
         }
     }
 
+    pub fn scheme(&self) -> &str {
+        SCHEMES[self.scheme_index]
+    }
+
     pub fn default_role(&self) -> &str {
         ROLES[self.default_role_index]
     }
 
-    /// Derive KEYCLOAK_URL from KEYCLOAK_PUBLIC_URL:
-    /// - Replace http:// with https:// — Keycloak is always behind Traefik TLS
-    /// - Replace "localhost" with "host.docker.internal" so the container can reach the host OS
+    /// Combine scheme + host + port into the public URL shown to the browser.
+    pub fn public_url(&self) -> String {
+        let host = self.host.trim();
+        let port = self.port.trim();
+        if port.is_empty() {
+            format!("{}://{}", self.scheme(), host)
+        } else {
+            format!("{}://{}:{}", self.scheme(), host, port)
+        }
+    }
+
+    /// Derive KEYCLOAK_URL (server-side) from the public URL.
+    /// Same scheme as public URL; replace "localhost" with "host.docker.internal"
+    /// so the analytics container can reach the host OS.
     pub fn keycloak_url(&self) -> String {
-        let url = if self.public_url.contains("localhost") {
-            self.public_url.replace("localhost", "host.docker.internal")
+        let host = if self.host.trim() == "localhost" {
+            "host.docker.internal"
         } else {
-            self.public_url.clone()
+            self.host.trim()
         };
-        // Ensure https for server-side token exchange (Traefik uses self-signed TLS)
-        if url.starts_with("http://") {
-            url.replacen("http://", "https://", 1)
+        let port = self.port.trim();
+        if port.is_empty() {
+            format!("{}://{}", self.scheme(), host)
         } else {
-            url
+            format!("{}://{}:{}", self.scheme(), host, port)
         }
     }
 
@@ -65,13 +86,12 @@ impl KeycloakFormData {
             return true;
         }
 
-        if self.public_url.trim().is_empty() {
-            self.error_message = "Keycloak Public URL is required!".to_string();
+        if self.host.trim().is_empty() {
+            self.error_message = "Host is required! (e.g. 192.168.1.100)".to_string();
             return false;
         }
-        if !self.public_url.starts_with("http://") && !self.public_url.starts_with("https://") {
-            self.error_message =
-                "Keycloak Public URL must start with http:// or https://".to_string();
+        if self.port.trim().is_empty() {
+            self.error_message = "Port is required! (e.g. 8082)".to_string();
             return false;
         }
         if self.realm.trim().is_empty() {
@@ -94,10 +114,11 @@ impl KeycloakFormData {
     pub fn get_current_value_mut(&mut self) -> Option<&mut String> {
         match &self.focus_state {
             FocusState::Field(idx) => match idx {
-                0 => Some(&mut self.public_url),
-                1 => Some(&mut self.realm),
-                2 => Some(&mut self.client_id),
-                3 => Some(&mut self.client_secret),
+                0 => Some(&mut self.host),
+                1 => Some(&mut self.port),
+                2 => Some(&mut self.realm),
+                3 => Some(&mut self.client_id),
+                4 => Some(&mut self.client_secret),
                 _ => None,
             },
             _ => None,
@@ -106,15 +127,16 @@ impl KeycloakFormData {
 
     pub fn field_name(idx: usize) -> &'static str {
         match idx {
-            0 => "Keycloak Public URL",
-            1 => "Realm",
-            2 => "Client ID",
-            3 => "Client Secret",
+            0 => "Host",
+            1 => "Port",
+            2 => "Realm",
+            3 => "Client ID",
+            4 => "Client Secret",
             _ => "",
         }
     }
 
     pub fn total_text_fields() -> usize {
-        4
+        5 // host, port, realm, client_id, client_secret
     }
 }

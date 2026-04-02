@@ -6,15 +6,11 @@ pub enum FocusState {
 }
 
 // Field indices:
-//   0 = host
-//   1 = ui_port
-//   2 = provider api_key
-//   3 = openai_api_key (only if needs_openai_embedding)
+//   0 = provider api_key
+//   1 = openai_api_key (only if needs_openai_embedding)
 
 #[derive(Debug, Clone)]
 pub struct FormData {
-    pub(crate) host: String,
-    pub(crate) ui_port: String,
     pub(crate) api_key: String,
     pub(crate) openai_api_key: String, // For embedding models that use OpenAI
     pub(crate) selected_provider: String,
@@ -25,8 +21,6 @@ pub struct FormData {
 impl FormData {
     pub fn new() -> Self {
         Self {
-            host: String::new(),
-            ui_port: "3000".to_string(),
             api_key: String::new(),
             openai_api_key: String::new(),
             selected_provider: String::new(),
@@ -36,16 +30,6 @@ impl FormData {
     }
 
     pub fn validate(&mut self) -> bool {
-        if self.host.trim().is_empty() {
-            self.error_message = "Host is required! (e.g. 192.168.1.100 or localhost)".to_string();
-            return false;
-        }
-
-        if self.ui_port.trim().is_empty() {
-            self.error_message = "UI Port is required! (default: 3000)".to_string();
-            return false;
-        }
-
         // Local services don't need API key
         if self.selected_provider == "lm_studio" || self.selected_provider == "ollama" {
             self.error_message.clear();
@@ -70,28 +54,12 @@ impl FormData {
     pub fn get_current_value_mut(&mut self) -> &mut String {
         match &self.focus_state {
             FocusState::Field(idx) => match idx {
-                0 => &mut self.host,
-                1 => &mut self.ui_port,
-                2 => &mut self.api_key,
-                3 => &mut self.openai_api_key,
+                0 => &mut self.api_key,
+                1 => &mut self.openai_api_key,
                 _ => &mut self.api_key,
             },
             _ => &mut self.api_key,
         }
-    }
-
-    pub fn nextauth_url(&self) -> String {
-        let host = if self.host.trim().is_empty() {
-            "localhost"
-        } else {
-            self.host.trim()
-        };
-        let port = if self.ui_port.trim().is_empty() {
-            "3000"
-        } else {
-            self.ui_port.trim()
-        };
-        format!("http://{}:{}", host, port)
     }
 
     pub fn needs_openai_embedding(&self) -> bool {
@@ -104,9 +72,9 @@ impl FormData {
 
     pub fn get_total_fields(&self) -> usize {
         if self.needs_openai_embedding() {
-            4 // host + ui_port + provider api_key + openai api_key
+            2 // provider api_key + openai api_key
         } else {
-            3 // host + ui_port + provider api_key
+            1 // provider api_key only
         }
     }
 

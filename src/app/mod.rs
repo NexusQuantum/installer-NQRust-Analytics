@@ -315,7 +315,7 @@ impl App {
                             if self.env_exists {
                                 if let Err(e) = self.apply_keycloak_to_env() {
                                     self.state = AppState::Error(format!(
-                                        "Failed to update .env with Keycloak settings: {}",
+                                        "Failed to update .env with Identity SSO settings: {}",
                                         e
                                     ));
                                     return Ok(());
@@ -1217,7 +1217,7 @@ impl App {
             ),
             (
                 "KEYCLOAK_PUBLIC_URL=",
-                format!("KEYCLOAK_PUBLIC_URL={}", kc.public_url.trim()),
+                format!("KEYCLOAK_PUBLIC_URL={}", kc.public_url()),
             ),
             (
                 "KEYCLOAK_URL=",
@@ -1255,7 +1255,7 @@ impl App {
             ),
             (
                 "NEXTAUTH_URL=",
-                format!("NEXTAUTH_URL={}", self.form_data.nextauth_url()),
+                format!("NEXTAUTH_URL=http://{}:3000", utils::detect_local_ip()),
             ),
         ];
 
@@ -1317,7 +1317,7 @@ impl App {
                         self.keycloak_form_data.auto_register =
                             !self.keycloak_form_data.auto_register;
                     }
-                    FocusState::Field(_) | FocusState::RoleSelect => {}
+                    FocusState::Field(_) | FocusState::RoleSelect | FocusState::SchemeSelect => {}
                 },
                 // Toggle booleans with space
                 KeyCode::Char(' ') => match &self.keycloak_form_data.focus_state {
@@ -1330,21 +1330,33 @@ impl App {
                     }
                     _ => {}
                 },
-                // Role select: left/right
-                KeyCode::Left => {
-                    if matches!(self.keycloak_form_data.focus_state, FocusState::RoleSelect) {
+                // Scheme select + Role select: left/right
+                KeyCode::Left => match self.keycloak_form_data.focus_state {
+                    FocusState::SchemeSelect => {
+                        let len = crate::app::keycloak_form_data::SCHEMES.len();
+                        self.keycloak_form_data.scheme_index =
+                            (self.keycloak_form_data.scheme_index + len - 1) % len;
+                    }
+                    FocusState::RoleSelect => {
                         let len = crate::app::keycloak_form_data::ROLES.len();
                         self.keycloak_form_data.default_role_index =
                             (self.keycloak_form_data.default_role_index + len - 1) % len;
                     }
-                }
-                KeyCode::Right => {
-                    if matches!(self.keycloak_form_data.focus_state, FocusState::RoleSelect) {
+                    _ => {}
+                },
+                KeyCode::Right => match self.keycloak_form_data.focus_state {
+                    FocusState::SchemeSelect => {
+                        let len = crate::app::keycloak_form_data::SCHEMES.len();
+                        self.keycloak_form_data.scheme_index =
+                            (self.keycloak_form_data.scheme_index + 1) % len;
+                    }
+                    FocusState::RoleSelect => {
                         let len = crate::app::keycloak_form_data::ROLES.len();
                         self.keycloak_form_data.default_role_index =
                             (self.keycloak_form_data.default_role_index + 1) % len;
                     }
-                }
+                    _ => {}
+                },
                 // Text input for active field
                 KeyCode::Char(c) => {
                     if let Some(val) = self.keycloak_form_data.get_current_value_mut() {
@@ -1364,11 +1376,12 @@ impl App {
                     {
                         FocusState::EnableToggle => {
                             if enabled {
-                                FocusState::Field(0)
+                                FocusState::SchemeSelect
                             } else {
                                 FocusState::SaveButton
                             }
                         }
+                        FocusState::SchemeSelect => FocusState::Field(0),
                         FocusState::Field(i) => {
                             let next = i + 1;
                             if next < KeycloakFormData::total_text_fields() {
@@ -1388,7 +1401,8 @@ impl App {
                     self.keycloak_form_data.focus_state = match &self.keycloak_form_data.focus_state
                     {
                         FocusState::EnableToggle => FocusState::CancelButton,
-                        FocusState::Field(0) => FocusState::EnableToggle,
+                        FocusState::SchemeSelect => FocusState::EnableToggle,
+                        FocusState::Field(0) => FocusState::SchemeSelect,
                         FocusState::Field(i) => FocusState::Field(i - 1),
                         FocusState::RoleSelect => {
                             FocusState::Field(KeycloakFormData::total_text_fields() - 1)
@@ -1618,13 +1632,14 @@ impl App {
         let mut env_content = utils::ENV_TEMPLATE.to_string();
 
         let kc = &self.keycloak_form_data;
-        let nextauth_url = self.form_data.nextauth_url();
+        let local_ip = utils::detect_local_ip();
+        let nextauth_url = format!("http://{}:3000", local_ip);
 
         // Default values
         env_content = env_content.replace("{{ANALYTICS_AI_SERVICE_PORT}}", "5555");
         env_content = env_content.replace("{{USER_UUID}}", user_uuid.as_str());
         env_content = env_content.replace("{{GENERATION_MODEL}}", "default");
-        env_content = env_content.replace("{{HOST_PORT}}", self.form_data.ui_port.trim());
+        env_content = env_content.replace("{{HOST_PORT}}", "3000");
         env_content = env_content.replace("{{AI_SERVICE_FORWARD_PORT}}", "5555");
         env_content = env_content.replace("{{JWT_SECRET}}", &jwt_secret);
         env_content = env_content.replace("{{NEXTAUTH_SECRET}}", &nextauth_secret);
@@ -1636,7 +1651,7 @@ impl App {
             "{{KEYCLOAK_OAUTH_ENABLED}}",
             if kc.enabled { "true" } else { "false" },
         );
-        env_content = env_content.replace("{{KEYCLOAK_PUBLIC_URL}}", kc.public_url.trim());
+        env_content = env_content.replace("{{KEYCLOAK_PUBLIC_URL}}", &kc.public_url());
         env_content = env_content.replace("{{KEYCLOAK_URL}}", &kc.keycloak_url());
         env_content = env_content.replace(
             "{{KEYCLOAK_REALM}}",

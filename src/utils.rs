@@ -11,6 +11,19 @@ pub const NORTHWIND_SQL: &str = include_str!("../northwind.sql");
 pub const INIT_ANALYTICS_DB_SQL: &str = include_str!("../00-init-analytics-db.sql");
 pub const ENSURE_ANALYTICS_DB_SH: &str = include_str!("../scripts/ensure-analytics-db.sh");
 
+/// Detect the primary local IP of this machine using the UDP socket trick.
+/// Connects to 8.8.8.8:80 without sending data — OS selects the right interface.
+pub fn detect_local_ip() -> String {
+    use std::net::UdpSocket;
+    UdpSocket::bind("0.0.0.0:0")
+        .and_then(|s| {
+            s.connect("8.8.8.8:80")?;
+            s.local_addr()
+        })
+        .map(|a| a.ip().to_string())
+        .unwrap_or_else(|_| "localhost".to_string())
+}
+
 pub fn find_file(filename: &str) -> bool {
     let root = project_root();
     root.join(filename).exists()
