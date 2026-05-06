@@ -38,6 +38,24 @@ fi
 PAYLOAD_FILE="${BUILD_DIR}/payload.tar.gz"
 PAYLOAD_MARKER="__NQRUST_PAYLOAD__"
 
+resolve_version() {
+    if [ -n "${VERSION:-}" ]; then
+        echo "${VERSION#v}"; return
+    fi
+    if git -C "${PROJECT_ROOT}" rev-parse --git-dir >/dev/null 2>&1; then
+        local tag
+        tag="$(git -C "${PROJECT_ROOT}" describe --tags --abbrev=0 2>/dev/null || true)"
+        if [ -n "${tag}" ]; then
+            echo "${tag#v}"; return
+        fi
+    fi
+    awk -F\" '/^version[[:space:]]*=/ {print $2; exit}' "${PROJECT_ROOT}/Cargo.toml"
+}
+
+PKG_VERSION="$(resolve_version)"
+PKG_ARCH="amd64"
+OUTPUT_NAME="nqrust-analytics-airgapped-installer-${PKG_VERSION}-${PKG_ARCH}"
+
 # Color output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -121,7 +139,7 @@ echo ""
 # Step 4: Create self-extracting binary
 log_step "Step 4/5: Creating self-extracting binary..."
 
-OUTPUT_FILE="${PROJECT_ROOT}/nqrust-analytics-airgapped"
+OUTPUT_FILE="${PROJECT_ROOT}/${OUTPUT_NAME}"
 
 # Remove old output if exists
 if [ -f "${OUTPUT_FILE}" ]; then
@@ -148,10 +166,10 @@ log_step "Step 5/5: Generating checksums..."
 
 if command -v sha256sum &> /dev/null; then
     CHECKSUM=$(sha256sum "${OUTPUT_FILE}" | cut -d' ' -f1)
-    echo "${CHECKSUM}  nqrust-analytics-airgapped" > "${PROJECT_ROOT}/nqrust-analytics-airgapped.sha256"
+    echo "${CHECKSUM}  ${OUTPUT_NAME}" > "${PROJECT_ROOT}/${OUTPUT_NAME}.sha256"
 elif command -v shasum &> /dev/null; then
     CHECKSUM=$(shasum -a 256 "${OUTPUT_FILE}" | cut -d' ' -f1)
-    echo "${CHECKSUM}  nqrust-analytics-airgapped" > "${PROJECT_ROOT}/nqrust-analytics-airgapped.sha256"
+    echo "${CHECKSUM}  ${OUTPUT_NAME}" > "${PROJECT_ROOT}/${OUTPUT_NAME}.sha256"
 else
     log_warn "No SHA256 tool found, skipping checksum"
     CHECKSUM="unavailable"
@@ -176,7 +194,7 @@ log_info "  - Marker: 16 bytes"
 log_info "  - Total: ${OUTPUT_SIZE}"
 echo ""
 log_info "Next steps:"
-log_info "  1. Verify: sha256sum -c nqrust-analytics-airgapped.sha256"
+log_info "  1. Verify: sha256sum -c ${OUTPUT_NAME}.sha256"
 log_info "  2. Transfer to airgapped machine (USB/SCP/etc)"
-log_info "  3. Run: ./nqrust-analytics-airgapped install"
+log_info "  3. Run: ./${OUTPUT_NAME} install"
 echo ""

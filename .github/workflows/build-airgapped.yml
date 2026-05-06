@@ -1,192 +1,212 @@
 name: Build Airgapped Binary
 
 on:
-    release:
-        types: [published]
-    workflow_dispatch:
-        inputs:
-            tag:
-                description: "Release tag (e.g., v1.0.0)"
-                required: false
-                default: "latest"
-            upload_to_release:
-                description: "Upload to latest release (true/false)"
-                required: false
-                default: "false"
+  release:
+    types: [published]
+
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g., v1.0.0)"
+        required: false
+        default: "latest"
+      upload_to_release:
+        description: "Upload to latest release (true/false)"
+        required: false
+        default: "false"
 
 env:
-    CARGO_TERM_COLOR: always
+  CARGO_TERM_COLOR: always
 
 permissions:
-    contents: write
-    packages: read
+  contents: write
+  packages: read
 
 jobs:
-    build-airgapped:
-        name: Build Airgapped Binary
-        runs-on: ubuntu-latest
-        timeout-minutes: 60
+  build-airgapped:
+    name: Build Airgapped Binary
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
 
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-            - name: Install Rust
-              uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
 
-            - name: Cache Rust dependencies
-              uses: Swatinem/rust-cache@v2
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
 
-            - name: Install system dependencies
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y gzip tar coreutils jq
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gzip tar coreutils jq
 
-            - name: Login to GitHub Container Registry
-              uses: docker/login-action@v3
-              with:
-                  registry: ghcr.io
-                  username: ${{ github.repository_owner }}
-                  password: ${{ secrets.GHCR_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GHCR_TOKEN }}
 
-            - name: Verify Docker authentication
-              run: |
-                  echo "Testing GHCR authentication..."
-                  echo "Repository: ${{ github.repository }}"
-                  echo "Repository Owner: ${{ github.repository_owner }}"
-                  echo "Actor: ${{ github.actor }}"
+      - name: Verify Docker authentication
+        run: |
+          echo "Testing GHCR authentication..."
+          echo "Repository: ${{ github.repository }}"
+          echo "Repository Owner: ${{ github.repository_owner }}"
+          echo "Actor: ${{ github.actor }}"
 
-                  # Test if we can access GHCR
-                  if docker pull ghcr.io/${{ github.repository_owner }}/analytics-engine:latest 2>&1 | grep -q "denied"; then
-                    echo "❌ Authentication failed - GITHUB_TOKEN may not have access to packages"
-                    echo "⚠️  Please ensure:"
-                    echo "   1. Packages are public OR"
-                    echo "   2. Workflow has 'packages: read' permission OR"
-                    echo "   3. Use a PAT with 'read:packages' scope"
-                    exit 1
-                  fi
-                  echo "✅ Authentication successful"
+          if docker pull ghcr.io/${{ github.repository_owner }}/analytics-engine:latest 2>&1 | grep -q "denied"; then
+            echo "Authentication failed - GITHUB_TOKEN may not have access to packages"
+            echo "Please ensure:"
+            echo "   1. Packages are public OR"
+            echo "   2. Workflow has 'packages: read' permission OR"
+            echo "   3. Use a PAT with 'read:packages' scope"
+            exit 1
+          fi
+          echo "Authentication successful"
 
-            - name: Build airgapped binary
-              run: |
-                  chmod +x scripts/airgapped/build-single-binary.sh
-                  chmod +x scripts/airgapped/save-images.sh
-                  chmod +x scripts/airgapped/build-payload.sh
-                  ./scripts/airgapped/build-single-binary.sh --force-refresh
+      - name: Resolve artifact name
+        id: artifact
+        run: |
+          # Priority: release tag > workflow_dispatch input > nearest git tag > Cargo.toml
+          RAW=""
+          if [ "${{ github.event_name }}" = "release" ]; then
+            RAW="${{ github.event.release.tag_name }}"
+          elif [ -n "${{ github.event.inputs.tag }}" ] && [ "${{ github.event.inputs.tag }}" != "latest" ]; then
+            RAW="${{ github.event.inputs.tag }}"
+          else
+            RAW="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+          fi
+          if [ -z "${RAW}" ]; then
+            RAW="$(awk -F\" '/^version[[:space:]]*=/ {print $2; exit}' Cargo.toml)"
+          fi
+          VERSION="${RAW#v}"
+          NAME="nqrust-analytics-airgapped-installer-${VERSION}-amd64"
+          echo "Resolved version: ${VERSION}"
+          echo "Artifact name:    ${NAME}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
 
-            - name: Validate binary
-              run: |
-                  echo "Validating airgapped binary..."
+      - name: Build airgapped binary
+        env:
+          VERSION: ${{ steps.artifact.outputs.version }}
+        run: |
+          chmod +x scripts/airgapped/build-single-binary.sh
+          chmod +x scripts/airgapped/save-images.sh
+          chmod +x scripts/airgapped/build-payload.sh
+          ./scripts/airgapped/build-single-binary.sh --force-refresh
 
-                  # Check file exists
-                  if [ ! -f nqrust-analytics-airgapped ]; then
-                    echo "❌ Binary not found!"
-                    exit 1
-                  fi
+      - name: Validate binary
+        env:
+          ARTIFACT: ${{ steps.artifact.outputs.name }}
+        run: |
+          echo "Validating airgapped binary..."
 
-                  # Check file size (should be > 1 GB with payload)
-                  SIZE=$(stat -c%s nqrust-analytics-airgapped)
-                  echo "Binary size: $(numfmt --to=iec-i --suffix=B $SIZE)"
-                  if [ $SIZE -lt 1000000000 ]; then
-                    echo "❌ Binary too small ($SIZE bytes), likely missing payload"
-                    exit 1
-                  fi
+          if [ ! -f "${ARTIFACT}" ]; then
+            echo "Binary not found: ${ARTIFACT}"
+            exit 1
+          fi
 
-                  # Check payload marker exists
-                  if ! grep -q "__NQRUST_PAYLOAD__" nqrust-analytics-airgapped; then
-                    echo "❌ Payload marker not found in binary"
-                    exit 1
-                  fi
+          SIZE=$(stat -c%s "${ARTIFACT}")
+          echo "Binary size: $(numfmt --to=iec-i --suffix=B $SIZE)"
+          if [ $SIZE -lt 1000000000 ]; then
+            echo "Binary too small ($SIZE bytes), likely missing payload"
+            exit 1
+          fi
 
-                  # Verify checksum file
-                  if [ ! -f nqrust-analytics-airgapped.sha256 ]; then
-                    echo "❌ Checksum file not found"
-                    exit 1
-                  fi
+          if ! grep -q "__NQRUST_PAYLOAD__" "${ARTIFACT}"; then
+            echo "Payload marker not found in binary"
+            exit 1
+          fi
 
-                  # Verify checksum
-                  if sha256sum -c nqrust-analytics-airgapped.sha256; then
-                    echo "✅ Checksum verification passed"
-                  else
-                    echo "❌ Checksum verification failed"
-                    exit 1
-                  fi
+          if [ ! -f "${ARTIFACT}.sha256" ]; then
+            echo "Checksum file not found"
+            exit 1
+          fi
 
-                  echo "✅ Binary validation passed"
+          sha256sum -c "${ARTIFACT}.sha256"
+          echo "Binary validation passed"
 
-            - name: Generate build info
-              run: |
-                  cat > build-info.txt <<EOF
-                  Build Information
-                  =================
+      - name: Generate build info
+        env:
+          ARTIFACT: ${{ steps.artifact.outputs.name }}
+        run: |
+          cat > build-info.txt <<EOF
+          Build Information
+          =================
 
-                  Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-                  Git Commit: ${{ github.sha }}
-                  Git Ref: ${{ github.ref }}
-                  Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          Git Commit: ${{ github.sha }}
+          Git Ref: ${{ github.ref }}
+          Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-                  Binary Details
-                  ==============
-                  File: nqrust-analytics-airgapped
-                  Size: $(stat -c%s nqrust-analytics-airgapped | numfmt --to=iec-i --suffix=B)
-                  SHA256: $(cat nqrust-analytics-airgapped.sha256)
+          Binary Details
+          ==============
+          File: ${ARTIFACT}
+          Size: $(stat -c%s "${ARTIFACT}" | numfmt --to=iec-i --suffix=B)
+          SHA256: $(cat "${ARTIFACT}.sha256")
 
-                  Included Docker Images
-                  ======================
-                  $(cat build/images/manifest.json | jq -r '.images[] | "- \(.name) (\(.size | tonumber / 1048576 | floor)MB)"')
+          Included Docker Images
+          ======================
+          $(cat build/images/manifest.json | jq -r '.images[] | "- \(.name) (\(.size | tonumber / 1048576 | floor)MB)"')
 
-                  Installation
-                  ============
-                  1. Download nqrust-analytics-airgapped
-                  2. Verify: sha256sum -c nqrust-analytics-airgapped.sha256
-                  3. Make executable: chmod +x nqrust-analytics-airgapped
-                  4. Run: ./nqrust-analytics-airgapped install
+          Installation
+          ============
+          1. Download ${ARTIFACT}
+          2. Verify: sha256sum -c ${ARTIFACT}.sha256
+          3. Make executable: chmod +x ${ARTIFACT}
+          4. Run: ./${ARTIFACT} install
 
-                  For detailed instructions, see:
-                  https://github.com/${{ github.repository }}/blob/main/docs/AIRGAPPED-INSTALLATION.md
-                  EOF
+          For detailed instructions, see:
+          https://github.com/${{ github.repository }}/blob/main/docs/AIRGAPPED-INSTALLATION.md
+          EOF
 
-            - name: Upload to release
-              if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.upload_to_release == 'true')
-              uses: softprops/action-gh-release@v1
-              with:
-                  files: |
-                      nqrust-analytics-airgapped
-                      nqrust-analytics-airgapped.sha256
-                      build-info.txt
-                      build/images/manifest.json
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload to release
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.upload_to_release == 'true')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ steps.artifact.outputs.name }}
+            ${{ steps.artifact.outputs.name }}.sha256
+            build-info.txt
+            build/images/manifest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Upload build artifacts
-              uses: actions/upload-artifact@v4
-              with:
-                  name: airgapped-binary-${{ github.ref_name }}-${{ github.sha }}
-                  path: |
-                      nqrust-analytics-airgapped
-                      nqrust-analytics-airgapped.sha256
-                      build-info.txt
-                      build/images/manifest.json
-                      build/images/SHA256SUMS
-                  retention-days: 30
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: airgapped-binary-${{ github.ref_name }}-${{ github.sha }}
+          path: |
+            ${{ steps.artifact.outputs.name }}
+            ${{ steps.artifact.outputs.name }}.sha256
+            build-info.txt
+            build/images/manifest.json
+            build/images/SHA256SUMS
+          retention-days: 30
 
-            - name: Summary
-              run: |
-                  echo "## 🎉 Airgapped Binary Build Complete" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
-                  echo "### Build Information" >> $GITHUB_STEP_SUMMARY
-                  echo "- **Binary Size**: $(stat -c%s nqrust-analytics-airgapped | numfmt --to=iec-i --suffix=B)" >> $GITHUB_STEP_SUMMARY
-                  echo "- **SHA256**: \`$(cat nqrust-analytics-airgapped.sha256 | cut -d' ' -f1)\`" >> $GITHUB_STEP_SUMMARY
-                  echo "- **Git Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
-                  echo "### Included Images" >> $GITHUB_STEP_SUMMARY
-                  cat build/images/manifest.json | jq -r '.images[] | "- **\(.name)**: \(.size | tonumber / 1048576 | floor)MB"' >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
-                  echo "### Download" >> $GITHUB_STEP_SUMMARY
-                  if [ "${{ github.event_name }}" == "release" ]; then
-                    echo "Binary uploaded to release: ${{ github.event.release.html_url }}" >> $GITHUB_STEP_SUMMARY
-                  else
-                    echo "Binary available as workflow artifact" >> $GITHUB_STEP_SUMMARY
-                  fi
+      - name: Summary
+        env:
+          ARTIFACT: ${{ steps.artifact.outputs.name }}
+        run: |
+          echo "## Airgapped Binary Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **Artifact**: \`${ARTIFACT}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Binary Size**: $(stat -c%s "${ARTIFACT}" | numfmt --to=iec-i --suffix=B)" >> $GITHUB_STEP_SUMMARY
+          echo "- **SHA256**: \`$(cat "${ARTIFACT}.sha256" | cut -d' ' -f1)\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Git Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Included Images" >> $GITHUB_STEP_SUMMARY
+          cat build/images/manifest.json | jq -r '.images[] | "- **\(.name)**: \(.size | tonumber / 1048576 | floor)MB"' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Download" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "Binary uploaded to release: ${{ github.event.release.html_url }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Binary available as workflow artifact" >> $GITHUB_STEP_SUMMARY
+          fi
