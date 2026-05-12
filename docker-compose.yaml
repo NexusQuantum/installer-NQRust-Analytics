@@ -2,6 +2,9 @@ volumes:
   data:
   qdrant_data:
   northwind_data:
+  # Shared between analytics-ui (writer) and analytics-service (reader) so
+  # the AI service can read PDFs uploaded via the UI for indexing/retrieval.
+  documents_storage:
 
 
 networks:
@@ -63,6 +66,8 @@ services:
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./data:/app/data:ro
+      # Read PDFs uploaded by the UI for Document RAG indexing/retrieval.
+      - documents_storage:/app/storage/documents:ro
     networks:
       - analytics
     depends_on:
@@ -129,10 +134,16 @@ services:
     platform: linux/amd64
     env_file:
       - .env
+    environment:
+      # Where the UI persists uploaded PDFs. Shared with analytics-service
+      # via the documents_storage named volume so the AI service can read
+      # them for indexing/retrieval.
+      DOCUMENT_STORAGE_DIR: /app/storage/documents
     ports:
       - "3000:3000"
     volumes:
       - data:/app/data
+      - documents_storage:/app/storage/documents
     networks:
       - analytics
     depends_on:
