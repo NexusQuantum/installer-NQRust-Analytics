@@ -179,6 +179,11 @@ ANALYTICS_AI_SERVICE_PORT=5555
 OPENAI_API_KEY=your-api-key-here
 GENERATION_MODEL=gpt-4o-mini
 
+# Document RAG (optional) — enables PDF upload, indexing, and Q&A.
+# Leave blank to skip the document feature; SQL Q&A works without it.
+# Get an API key at https://dash.pageindex.ai/
+PAGEINDEX_API_KEY=
+
 # Database
 DB_TYPE=pg
 PG_URL=postgres://demo:demo123@northwind-db:5432/northwind
