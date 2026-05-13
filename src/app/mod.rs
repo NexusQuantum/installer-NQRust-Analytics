@@ -1672,11 +1672,6 @@ impl App {
         // License key — left empty; user activates via the web UI after installation
         env_content = env_content.replace("{{LICENSE_KEY}}", "");
 
-        // PageIndex API key — left empty by default. Document RAG (PDF upload
-        // & Q&A) is opt-in: the user can add their PageIndex key to .env after
-        // installation if they want to use it. SQL Q&A works without it.
-        env_content = env_content.replace("{{PAGEINDEX_API_KEY}}", "");
-
         // Set API key based on provider
         let env_key = self.form_data.get_env_key_name();
         let api_key_value = self.form_data.api_key.trim();

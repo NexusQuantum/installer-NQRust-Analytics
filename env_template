@@ -22,11 +22,6 @@ SHOULD_FORCE_DEPLOY=1
 # vendor keys
 OPENAI_API_KEY={{OPENAI_API_KEY}}
 
-# PageIndex API key — required for Document RAG (upload/index/Q&A on PDFs).
-# Get one at https://dash.pageindex.ai/. Leave blank to disable the document
-# RAG feature; SQL Q&A continues to work without it.
-PAGEINDEX_API_KEY={{PAGEINDEX_API_KEY}}
-
 # user id
 USER_UUID={{USER_UUID}}
 

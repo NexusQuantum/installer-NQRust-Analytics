@@ -179,10 +179,9 @@ ANALYTICS_AI_SERVICE_PORT=5555
 OPENAI_API_KEY=your-api-key-here
 GENERATION_MODEL=gpt-4o-mini
 
-# Document RAG (optional) — enables PDF upload, indexing, and Q&A.
-# Leave blank to skip the document feature; SQL Q&A works without it.
-# Get an API key at https://dash.pageindex.ai/
-PAGEINDEX_API_KEY=
+# Document RAG is enabled by default and uses your existing LLM credentials
+# (OPENAI_API_KEY / provider above). PDF upload, indexing, and Q&A work
+# out of the box with no extra service to provision.
 
 # Database
 DB_TYPE=pg

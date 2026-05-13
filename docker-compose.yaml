@@ -5,6 +5,10 @@ volumes:
   # Shared between analytics-ui (writer) and analytics-service (reader) so
   # the AI service can read PDFs uploaded via the UI for indexing/retrieval.
   documents_storage:
+  # Writable workspace for the local PageIndex engine (parsed page cache,
+  # intermediate JSON). Kept separate from documents_storage so the AI
+  # service can mount the PDF folder read-only.
+  pageindex_workspace:
 
 
 networks:
@@ -61,6 +65,11 @@ services:
     platform: linux/amd64
     env_file:
       - .env
+    environment:
+      # Local PageIndex engine workspace (parsed page cache, intermediate
+      # artifacts). Must be writable; keep it separate from the read-only
+      # PDF mount below.
+      DOCUMENT_WORKSPACE_DIR: /app/pageindex_workspace
     ports:
       - "5555:5555"
     volumes:
@@ -68,6 +77,8 @@ services:
       - ./data:/app/data:ro
       # Read PDFs uploaded by the UI for Document RAG indexing/retrieval.
       - documents_storage:/app/storage/documents:ro
+      # Writable workspace for the vendored PageIndex engine.
+      - pageindex_workspace:/app/pageindex_workspace
     networks:
       - analytics
     depends_on:
