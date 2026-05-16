@@ -53,6 +53,12 @@ NEXTAUTH_URL=http://localhost:3000
 # Required when Keycloak is behind Traefik with self-signed TLS certificate
 NODE_TLS_REJECT_UNAUTHORIZED=0
 
+# URL the analytics-service uses to POST async results (document tree, etc.)
+# back to analytics-ui. Must be reachable from inside the AI service
+# container — use the docker service name, not the host machine's IP, or
+# the callback will silently fail and documents will hang at "indexing".
+CALLBACK_BASE_URL=http://analytics-ui:3000
+
 # Keycloak / NQRust Identity SSO (Optional)
 KEYCLOAK_OAUTH_ENABLED={{KEYCLOAK_OAUTH_ENABLED}}
 KEYCLOAK_PUBLIC_URL={{KEYCLOAK_PUBLIC_URL}}
