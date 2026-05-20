@@ -17,7 +17,12 @@ ANALYTICS_AI_ENDPOINT=http://analytics-service:${ANALYTICS_AI_SERVICE_PORT}
 
 # ai service settings
 QDRANT_HOST=qdrant
-SHOULD_FORCE_DEPLOY=1
+# Set to "1" only if you intentionally want to wipe and rebuild every
+# Qdrant collection on each container startup. Leave at 0 (or remove the
+# line) for normal operation — recreate-on-startup combined with
+# gunicorn's multi-worker model used to race on Qdrant 409 Conflict and
+# crash workers until one survived.
+SHOULD_FORCE_DEPLOY=0
 
 # vendor keys
 OPENAI_API_KEY={{OPENAI_API_KEY}}
