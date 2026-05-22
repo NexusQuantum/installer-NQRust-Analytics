@@ -31,7 +31,7 @@ provider: qdrant
 location: http://qdrant:6333
 embedding_model_dim: 1024
 timeout: 120
-recreate_index: true
+recreate_index: false
 
 ---
 {{ENGINE_SECTION}}

@@ -35,7 +35,12 @@ provider: qdrant
 location: http://qdrant:6333
 embedding_model_dim: 4096
 timeout: 120
-recreate_index: true
+# `false` keeps existing Qdrant collections across restarts. With prior
+# multi-worker setups each worker would race to recreate collections on
+# boot, causing 409 Conflict that crashed workers in a restart loop.
+# Even on single-worker this is safer: data persists between container
+# restarts and rebuilds happen explicitly via SHOULD_FORCE_DEPLOY=1.
+recreate_index: false
 
 ---
 type: engine
