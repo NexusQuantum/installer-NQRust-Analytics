@@ -51,6 +51,11 @@ ANALYTICS_DB_PASSWORD=analytics123
 PG_URL=postgres://analytics:analytics123@northwind-db:${POSTGRES_PORT}/analytics
 NEXT_PUBLIC_TELEMETRY_ENABLED=false
 
+# Max upload size per document (in MB). Both the server-side formidable
+# validator AND the UI's pre-validation read from this. Bump higher if
+# users need to upload larger PDFs / DOCX / PPTX files.
+DOCUMENT_MAX_SIZE_MB=100
+
 # Authentication (REQUIRED)
 JWT_SECRET={{JWT_SECRET}}
 NEXTAUTH_SECRET={{NEXTAUTH_SECRET}}
